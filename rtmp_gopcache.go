@@ -3,9 +3,9 @@ package main
 import (
 	"container/list"
 	"fmt"
-	"livegateway/utils"
 	"log"
 	"sync"
+	"utils"
 )
 
 /*************************************************/

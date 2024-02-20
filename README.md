@@ -22,6 +22,25 @@ rtcp协议支持                0%
 资源回收                    0%
 支持音频转码(重采样)        40%
 
+## 测试说明
+sip服务器 [tcp|udp]://172.20.25.20:62090
+tcpdump -nnvvv -i eth0 port 62090 -w sip.pcap
+
+流媒体服务器 [tcp|udp]://172.20.25.20:62091
+tcpdump -nnvvv -i eth0 host 10.3.220.151 -w rtp.pcap
+
+摄像头 10.3.220.151
+
+DCN 10.3.220.68
+端口转发
+10.3.220.68:62090 换发给 172.20.25.20:62090
+10.3.220.68:62091 换发给 172.20.25.20:62091
+
+sip协议交互流程, 参考下面2个文档
+GBT-28181_2011.pdf
+GBT-28181_2016.pdf
+
+## rtsp推路命令
 ffmpeg -rtsp_transport tcp -i rtsp://125.39.179.77:2554/SPq3pr6f6kNa/RSPq3pr6f6kNa-eQW54pIhKa -c:v copy -c:a copy -f flv -y "rtmp://192.168.16.171:1945/SPq3pr6f6kNa/RSPq3pr6f6kNa-eQW54pIhKb?owner=Spy2023Zjr"
 ffplay rtmp://192.168.16.171:1945/SPq3pr6f6kNa/RSPq3pr6f6kNa-eQW54pIhKb
 ffplay http://192.168.16.171:1995/SPq3pr6f6kNa/RSPq3pr6f6kNa-eQW54pIhKb.flv

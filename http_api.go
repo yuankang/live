@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"livegateway/utils"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+	"utils"
 )
 
 type Rsps struct {
@@ -318,10 +318,10 @@ func GB28181Create(w http.ResponseWriter, r *http.Request, d []byte) ([]byte, er
 	rsps.Ip = conf.IpOuter
 
 	var tcp, udp DataPort
-	tcp.Rtp, _ = strconv.Atoi(conf.GB28181.RtpPort)
-	tcp.Rtcp, _ = strconv.Atoi(conf.GB28181.RtcpPort)
-	udp.Rtp, _ = strconv.Atoi(conf.GB28181.RtpPort)
-	udp.Rtcp, _ = strconv.Atoi(conf.GB28181.RtcpPort)
+	tcp.Rtp, _ = strconv.Atoi(conf.RtpRtcp.FixedRtpPort)
+	tcp.Rtcp, _ = strconv.Atoi(conf.RtpRtcp.FixedRtcpPort)
+	udp.Rtp, _ = strconv.Atoi(conf.RtpRtcp.FixedRtpPort)
+	udp.Rtcp, _ = strconv.Atoi(conf.RtpRtcp.FixedRtcpPort)
 	rsps.TcpPort = &tcp
 	rsps.UdpPort = &udp
 

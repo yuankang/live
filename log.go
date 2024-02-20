@@ -7,8 +7,7 @@ import (
 	"path"
 	"strings"
 	"time"
-
-	"livegateway/utils"
+	"utils"
 )
 
 /*

@@ -3,11 +3,11 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"livegateway/utils"
 	"log"
 	"os"
 	"path"
 	"strings"
+	"utils"
 )
 
 /*

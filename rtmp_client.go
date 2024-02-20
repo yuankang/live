@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"livegateway/utils"
 	"log"
 	"net"
 	"time"
+	"utils"
 )
 
 /*************************************************/

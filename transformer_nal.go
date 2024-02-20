@@ -897,7 +897,7 @@ https://zhuanlan.zhihu.com/p/608942708?utm_id=0
 xxxxxx, type=35(0x23)	AUD
 0x4E01, type=39(0x27)	SEI(补充增强信息) PREFIX_SEI_NUT
 0x5001, type=40(0x28)	SEI(补充增强信息) SUFFIX_SEI_NUT
-0x6001, type=48(0x30)	组合帧封装方式, 当帧较小且多个帧合并后小于MTU时, 可以多帧组合封装到一个RTP包中,
+0x6001, type=48(0x30)	组合帧封装方式, 当帧较小且多个帧合并后小于MTU时, 可多帧封装到一个RTP包中,
 						比如(VPS/SPS/PPS)合并封装, 注意多帧合并后大小必须小于MTU, 不然会被IP分片
 0x6201, type=49(0x31)	Fua分片封装模式, 当视频帧大于MTU, 需要对帧进行分包发送, 从而避免IP层分片
 Type 6bit 确定NAL的类型, 其中VCL NAL和non-VCL NAL各有32类

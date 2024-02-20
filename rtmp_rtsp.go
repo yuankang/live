@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	"livegateway/utils"
 	"log"
 	"time"
+	"utils"
 )
 
 //1 发送sps, pps; 2 发送缓存音视频; 3 发送实时数据;

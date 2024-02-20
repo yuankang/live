@@ -215,7 +215,7 @@ func ReadUint16(r io.Reader, n uint32, bo ByteOrder) (uint16, error) {
 	b, err := ReadByte(r, n)
 	if err != nil {
 		if err != io.EOF {
-			log.Println(err)
+			//log.Println(err)
 		}
 		return 0, err
 	}

@@ -5,7 +5,6 @@ import (
 	"container/list"
 	"fmt"
 	"io"
-	"livegateway/utils"
 	"log"
 	"math"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"utils"
 )
 
 const (

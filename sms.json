@@ -1,16 +1,16 @@
 {
-    "IpInner":"192.168.16.163",
-    "IpOuter":"192.168.16.163",
+    "IpInner":"127.0.0.1",
+    "IpOuter":"127.0.0.1",
     "Cpu":{
         "Enable":false,
         "UseNum":1
     },
     "Log":{
-        "FileName":"/usr/local/slivegateway/slivegateway.log",
+        "FileName":"/usr/local/sms/sms.log",
         "FileSize":200,
         "FileNum":10,
         "SaveDay":15,
-        "StreamLogPath":"/usr/local/slivegateway/streamlog",
+        "StreamLogPath":"/usr/local/sms/streamlog",
         "PubLogSaveDay":7,
         "PlayLogCheck":60,
         "PlayLogDelete":60
@@ -29,17 +29,18 @@
         "PriKey":"/usr/local/sliveserver/ca/private.key"
     },
     "GB28181":{
-        "SipTlp":"tcp",
         "SipIp":"172.20.25.20",
         "SipPort":"62090",
         "SipProxyIp":"10.3.220.68",
         "SipProxyPort":"62090",
         "SipId":"34020000002000000001",
-        "SipDom":"3402000000",
-        "RtpPort":"9020",
-        "RtcpPort":"9091",
-        "RtpPortMin":60000,
-        "RtpPortMax":61000
+        "SipDom":"3402000000"
+    },
+    "RtpRtcp":{
+        "FixedRtpPort":9020,
+        "FixedRtcpPort":9021,
+        "RangePortMin":60000,
+        "RangePortMax":61400
     },
     "Rtsp":{
         "Port":"2995",
@@ -97,7 +98,7 @@
     "StreamRec":{
         "Enable":false,
         "StreamId":"GSPb4ohbi65Wm-eZTaaou4ol",
-        "SavePath":"/usr/local/slivegateway/record"
+        "SavePath":"/usr/local/sms/record"
     },
     "Debug":{
         "StreamId":"GSPb4ohbi65Wm-eZTaaou4ol"

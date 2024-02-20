@@ -10,20 +10,18 @@ import (
 	"runtime"
 	"sync"
 	"syscall"
+	"utils"
 
-	"livegateway/utils"
 	//调试时使用，线上最好关闭
 	//_ "net/http/pprof"
-
 	"github.com/kardianos/service"
 	"github.com/natefinch/lumberjack"
 )
 
 const (
-	AppName = "slivegateway"
-	//AppName    = "mmlive"
-	AppVersion = "2.0.1"
-	AppConf    = "/usr/local/slivegateway/slivegateway.json"
+	AppName    = "sms"
+	AppVersion = "0.0.1"
+	AppConf    = "/usr/local/sms/sms.json"
 	BackDoor   = "owner=Spy2023Zjr"
 )
 
@@ -78,6 +76,7 @@ type Config struct {
 	Http      HttpConf
 	Https     HttpsConf
 	GB28181   GB28181Conf
+	RtpRtcp   RtpRtcpConf
 	Rtsp      RtspConf
 	Rtmp      RtmpConf
 	Flv       FlvConf
@@ -134,17 +133,19 @@ type HttpsConf struct {
 }
 
 type GB28181Conf struct {
-	SipTlp       string //Tlp: transport layer protocol
 	SipIp        string
 	SipPort      string
 	SipIpProxy   string
 	SipPortProxy string
 	SipId        string
 	SipDom       string
-	RtpPort      string
-	RtcpPort     string
-	RtpPortMin   int
-	RtpPortMax   int
+}
+
+type RtpRtcpConf struct {
+	FixedRtpPort  string
+	FixedRtcpPort string
+	RangePortMin  int
+	RangePortMax  int
 }
 
 type RtspConf struct {
@@ -307,10 +308,10 @@ func (p *program) run() {
 	//go PuberLogCutoffTimer() //每天0点分割清理发布者日志
 	//go NetworkTrafficTimer() //流量统计与上报
 
-	//go SipServerTcp() //for gb28181
-	//go SipServerUdp() //for gb28181
-	//go RtpServerTcp() //for gb28181
-	//go RtpServerUdp() //for gb28181
+	go SipServerTcp() //for gb28181
+	go SipServerUdp() //for gb28181
+	go RtpServerTcp() //for gb28181
+	go RtpServerUdp() //for gb28181
 	go RtspServer()
 	go RtmpServer()
 

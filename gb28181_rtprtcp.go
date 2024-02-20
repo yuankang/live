@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"livegateway/utils"
 	"log"
 	"net"
+	"utils"
 )
 
 /*************************************************/
@@ -184,7 +184,7 @@ func RtpReceiverUdp(c *net.UDPConn) {
 }
 
 func RtpServerUdp() {
-	addr := fmt.Sprintf(":%s", conf.GB28181.RtpPort)
+	addr := fmt.Sprintf(":%s", conf.RtpRtcp.FixedRtpPort)
 	log.Printf("listen rtp(udp) on %s", addr)
 
 	laddr, _ := net.ResolveUDPAddr("udp", addr)
@@ -352,7 +352,7 @@ func RtpReceiverTcp(c net.Conn) {
 }
 
 func RtpServerTcp() {
-	addr := fmt.Sprintf(":%s", conf.GB28181.RtpPort)
+	addr := fmt.Sprintf(":%s", conf.RtpRtcp.FixedRtpPort)
 	log.Printf("listen rtp(tcp) on %s", addr)
 
 	l, err := net.Listen("tcp", addr)
