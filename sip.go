@@ -10,117 +10,6 @@ import (
 	"utils"
 )
 
-/*
-协议版本            GB/T28181-2016
-SIP服务器ID         11000000122000000034
-SIP服务器域         1100000012
-SIP服务器地址       10.3.220.68
-SIP服务器端口       62097
-SIP用户名           11010000121310000034
-SIP用户认证ID       11010000121310000034
-密码                123456
-注册有效期          3600 秒
-心跳周期            60 秒
-本地SIP端口         5060
-注册间隔            60 秒
-最大心跳超时次数    3
-*/
-// 摄像头   10.3.220.151    5060
-// DCN      10.3.220.68     62097 50280
-
-// 流媒体   172.20.25.20    62097
-// tcpdump -nnvvv -i eth0 port 62097 -w sipSms.pcap
-// scp root@172.20.25.20:/root/sipSms.pcap .
-
-// sip      172.20.25.28    50280
-// ssh root@172.20.25.28    Lty20@Ltsk21
-// tcpdump -nnvvv -i eth0 host 10.3.220.151 -w sipSvr.pcap
-// scp root@172.20.25.28:/root/sipSvr.pcap .
-
-//## sip服务器 返回的 应答消息
-var Sip1Rsps = "SIP/2.0 401 Unauthorized\r\n" +
-	"Via: SIP/2.0/TCP %s:%s;rport=%s;received=%s;branch=%s\r\n" +
-	"From: <sip:11010000121310000034@1100000012>;tag=%s\r\n" +
-	"To: <sip:11010000121310000034@1100000012>;tag=%s\r\n" +
-	"Call-ID: %s\r\n" +
-	"CSeq: 1 REGISTER\r\n" +
-	"WWW-Authenticate: Digest realm=\"1100000012\",nonce=\"%s\",opaque=\"%s\",algorithm=md5\r\n" +
-	"Content-Length:  0\r\n\r\n"
-
-var Sip2Rsps = "SIP/2.0 200 OK\r\n" +
-	"Via: SIP/2.0/TCP %s:%s;rport=%s;received=%s;branch=%s\r\n" +
-	"From: <sip:11010000121310000034@1100000012>;tag=%s\r\n" +
-	"To: <sip:11010000121310000034@1100000012>;tag=%s\r\n" +
-	"Call-ID: %s\r\n" +
-	"CSeq: %d REGISTER\r\n" +
-	"Data: %s\r\n" +
-	"Expires: 3600\r\n" +
-	"Content-Length:  0\r\n\r\n"
-
-var Sip4Rsps = "SIP/2.0 200 OK\r\n" +
-	"Via: SIP/2.0/TCP %s:%s;rport=%s;received=%s;branch=%s\r\n" +
-	"From: <sip:11010000121310000034@1100000012>;tag=%s\r\n" +
-	"To: <sip:11010000121310000034@1100000012>;tag=%s\r\n" +
-	"Call-ID: %s\r\n" +
-	"CSeq: %s MESSAGE\r\n" +
-	"Content-Length:  0\r\n\r\n"
-
-var Sip1Rqst = "MESSAGE sip:11010000121310000034@10.3.220.151:5060 SIP/2.0\r\n" +
-	"Via: SIP/2.0/TCP 10.3.220.68:62097;rport;branch=z9hG4bKPjKGSI94O1i7pQoYqcuJnNBdIDWGI3TyR.\r\n" +
-	"From: <sip:11000000122000000034@1100000012>;tag=u1TsYkW1MPmX6L5Vz0KD2mdIf8lexOTB\r\n" +
-	"To: <sip:11010000121310000034@1100000012>\r\n" +
-	"Call-ID: IMg2pPgKOBdDB3SowCcfiNeUsXjdMuRB\r\n" +
-	"CSeq: 49715 MESSAGE\r\n" +
-	"Max-Forwards: 70\r\n" +
-	"Content-Type: Application/MANSCDP+xml\r\n" +
-	"Content-Length:   141\r\n\r\n" +
-	"<?xml version=\"1.0\" ?>\n" +
-	"<Query>\n" +
-	"    <CmdType>DeviceInfo</CmdType>\n" +
-	"    <SN>1</SN>\n" +
-	"    <DeviceID>42010000121310000000</DeviceID>\n" +
-	"</Query>\n"
-
-var Sip2Rqst = "MESSAGE sip:11010000121310000034@10.3.220.151:5060 SIP/2.0\r\n" +
-	"Via: SIP/2.0/TCP 10.3.220.68:62097;rport;branch=z9hG4bKPjfnUTD6prc4w82Jd2vxFy16E8LV.kZZZz\r\n" +
-	"From: <sip:11000000122000000034@1100000012>;tag=hn3zMtTNiHYmNLr3J9bm5TyUGMJuhp3n\r\n" +
-	"To: <sip:11010000121310000034@1100000012>\r\n" +
-	"Call-ID: PiJRk4MOfpmVQZR8ub3XBdE36l3AIwih\r\n" +
-	"CSeq: 40628 MESSAGE\r\n" +
-	"Max-Forwards: 70\r\n" +
-	"Content-Type: Application/MANSCDP+xml\r\n" +
-	"Content-Length:   138\r\n\r\n" +
-	"<?xml version=\"1.0\" ?>\n" +
-	"<Query>\n" +
-	"    <CmdType>Catalog</CmdType>\n" +
-	"    <SN>1</SN>\n" +
-	"    <DeviceID>42010000121310000000</DeviceID>\n" +
-	"</Query>\n"
-
-/*
-2022/04/03 20:51:17 sip.go:235: recvLen: 541, recvData:
-MESSAGE sip:11000000122000000034@1100000012 SIP/2.0
-Via: SIP/2.0/TCP 10.3.220.151:42341;rport;branch=z9hG4bK581882449
-From: <sip:11010000121310000034@1100000012>;tag=57873780
-To: <sip:11000000122000000034@1100000012>
-Call-ID: 934168825
-CSeq: 20 MESSAGE
-Content-Type: Application/MANSCDP+xml
-Max-Forwards: 70
-User-Agent: IP Camera
-Content-Length:   177
-
-<?xml version="1.0" encoding="GB2312"?>
-<Notify>
-<CmdType>Keepalive</CmdType>
-<SN>44</SN>
-<DeviceID>11010000121310000034</DeviceID>
-<Status>OK</Status>
-<Info>
-</Info>
-</Notify>
-*/
-
 /*************************************************/
 /* Sip Register1, 见 J.1 注册信令消息示范
 /*************************************************/
@@ -466,11 +355,10 @@ func SipHandlerUdp(l *net.UDPConn) {
 			log.Println(err)
 			return
 		}
+		rqst = string(buf[:n])
+		log.Printf("recvFrom %s:%d, SipMsgSeq %d, len=%d, data:\n%s", r.IP, r.Port, n, rqst)
 		log.Printf("--> SipRqstNum %d", i)
 		i++
-
-		rqst = string(buf[:n])
-		log.Printf("recvFrom %s:%d, len=%d, data:\n%s", r.IP, r.Port, n, rqst)
 
 		head, body = SipRqstSplit(rqst)
 		sr = SipHeadParse(head)
@@ -481,7 +369,7 @@ func SipHandlerUdp(l *net.UDPConn) {
 		}
 
 		switch sr.CSeq {
-		case "1 REGISTER":
+		case "CSeq: 1 REGISTER":
 			rsps = SipRegister1Rsps(sr)
 		case "2 REGISTER":
 			rsps = SipRegister2Rsps(sr)
