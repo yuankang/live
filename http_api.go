@@ -80,7 +80,7 @@ REDO:
 }
 
 type StreamStateInfo struct {
-	s     RtmpStream
+	s     Stream
 	state int
 }
 
@@ -121,7 +121,7 @@ type PubAuthResult struct {
 	RecordType int    `json:"recordType"` // 录制类型
 }
 
-func PublishAuth(s *RtmpStream) {
+func PublishAuth(s *Stream) {
 	var par PubAuthRqst
 	par.IpPusher = s.RemoteIp
 	par.IpOuter = conf.IpOuter
@@ -197,7 +197,7 @@ type StreamStateRsps struct {
 	Msg  string `json:"message"`
 }
 
-func StreamStateReport(s *RtmpStream, state int) {
+func StreamStateReport(s *Stream, state int) {
 	var ssr StreamStateRqst
 	ssr.IpPusher = s.RemoteIp
 	ssr.IpOuter = conf.IpOuter
@@ -358,7 +358,7 @@ func GB28181Start(w http.ResponseWriter, r *http.Request, d []byte) ([]byte, err
 			log.Println(err)
 			return nil, err
 		}
-		s := v.(*RtmpStream)
+		s := v.(*Stream)
 
 		s.GbRqst.RtpSsrc = rqst.RtpSsrc
 		n, _ := strconv.ParseUint(rqst.RtpSsrc, 10, 0)
@@ -415,7 +415,7 @@ func GB28181Delete(w http.ResponseWriter, r *http.Request, d []byte) ([]byte, er
 			rsps.Msg = err.Error()
 			//return nil, err
 		} else {
-			s := v.(*RtmpStream)
+			s := v.(*Stream)
 			SsrcMap.Delete(s.GbRqst.RtpSsrcUint32)
 			StreamMap.Delete(key)
 		}
@@ -445,9 +445,9 @@ func GB28181StreamList(w http.ResponseWriter, r *http.Request) ([]byte, error) {
 		rsps.Ts = utils.GetTimestamp("ms")
 
 		var i int
-		var s *RtmpStream
+		var s *Stream
 		SsrcMap.Range(func(k, v interface{}) bool {
-			s, _ = v.(*RtmpStream)
+			s, _ = v.(*Stream)
 			log.Printf("%d, ssrc=%.10d, streamid=%s", i, k, s.GbRqst.StreamId)
 			i++
 			return true

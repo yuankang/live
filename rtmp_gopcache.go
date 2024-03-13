@@ -11,7 +11,7 @@ import (
 /*************************************************/
 /* gop Cache
 /*************************************************/
-func MetaSendRtmp(p, s *RtmpStream) {
+func MetaSendRtmp(p, s *Stream) {
 	// 1 发送Metadata
 	s.log.Println("<== low latency send Metadata")
 	v, ok := p.GopCache.MetaData.Load(p.Key)
@@ -23,7 +23,7 @@ func MetaSendRtmp(p, s *RtmpStream) {
 	}
 }
 
-func GopCacheFastlowSendRtmp(p, s *RtmpStream, gop *GopCache) {
+func GopCacheFastlowSendRtmp(p, s *Stream, gop *GopCache) {
 	goplocks.Lock()
 	var chunkNum, videoChunkNum, audioChunkNum int
 	var lastChunk, videoChunk, audioChunk Chunk
@@ -117,8 +117,8 @@ func GopCacheFastlowSendRtmp(p, s *RtmpStream, gop *GopCache) {
 	s.log.Println("<== GopCacheFastlowSendRtmp() ok")
 }
 
-func GopCacheFastlowSend(s, p *RtmpStream) {
-	switch p.StreamType {
+func GopCacheFastlowSend(s, p *Stream) {
+	switch p.Type {
 	case "rtmpPlayer":
 		GopCacheFastlowSendRtmp(s, p, &s.GopCache)
 	case "flvPlayer":
@@ -126,8 +126,8 @@ func GopCacheFastlowSend(s, p *RtmpStream) {
 	}
 }
 
-func GopCacheSend(s, p *RtmpStream) {
-	switch p.StreamType {
+func GopCacheSend(s, p *Stream) {
+	switch p.Type {
 	case "rtmpPlayer":
 		GopCacheSendRtmp(s, p, &s.GopCache)
 	case "flvPlayer":
@@ -135,7 +135,7 @@ func GopCacheSend(s, p *RtmpStream) {
 	}
 }
 
-func CalcGopBitrate(s *RtmpStream, c Chunk) {
+func CalcGopBitrate(s *Stream, c Chunk) {
 	if s.GopStartTs == 0 {
 		s.GopStartTs = utils.GetTimestamp("s")
 	}
@@ -165,7 +165,7 @@ func CalcGopBitrate(s *RtmpStream, c Chunk) {
 	//s.log.Printf("GopNum=%d, MsgLen=%d, DataSize=%d, DataType=%s", s.GopNum, c.MsgLength, s.GopDataSize, c.DataType)
 }
 
-func PrintList(s *RtmpStream, l *list.List) {
+func PrintList(s *Stream, l *list.List) {
 	s.log.Println(">>>>>> s.MediaData list <<<<<<")
 	var c *Chunk
 	var i uint
@@ -176,7 +176,7 @@ func PrintList(s *RtmpStream, l *list.List) {
 	}
 }
 
-func sGopCacheSendRtmp(rs *RtmpStream, s *RtmpStream, gop *GopCache) {
+func sGopCacheSendRtmp(rs *Stream, s *Stream, gop *GopCache) {
 	// 1 发送Metadata
 	s.log.Println("<== send Metadata")
 
@@ -227,7 +227,7 @@ func sGopCacheSendRtmp(rs *RtmpStream, s *RtmpStream, gop *GopCache) {
 	s.log.Println("<== GopCacheSendRtmp() ok")
 }
 
-func sGopCacheUpdate(s *RtmpStream) {
+func sGopCacheUpdate(s *Stream) {
 	if s.GopCacheNum <= s.GopCacheMax {
 		return
 	}
@@ -265,7 +265,7 @@ func sGopCacheUpdate(s *RtmpStream) {
 	s.log.Printf("GopRm: FrameLen=%d, vFrameNum=%d, aFrameNum=%d, DataSize=%d, SaveFrameNum=%d", i, vFrameNum, aFrameNum, DataSize, s.MediaData.Len())
 }
 
-func GopCacheShow(s *RtmpStream) {
+func GopCacheShow(s *Stream) {
 	var i int
 	var c *Chunk
 
@@ -334,7 +334,7 @@ func CreateVideoPacket(data []byte, dType, codecType string) []byte {
 /*************************************************/
 //avcc格式 要转为 annexB格式
 //开始码+sps+开始码+pps+开始码+VideoKeyFrame
-func GopGetIframeH264(s *RtmpStream) ([]byte, error) {
+func GopGetIframeH264(s *Stream) ([]byte, error) {
 	var d []byte
 	var err error
 	var c Chunk
@@ -389,7 +389,7 @@ func GopGetIframeH264(s *RtmpStream) ([]byte, error) {
 
 // avcc格式 要转为 annexB格式
 // 开始码+vps+开始码+sps+开始码+pps+开始码+VideoKeyFrame
-func GopGetIframeH265(s *RtmpStream) ([]byte, error) {
+func GopGetIframeH265(s *Stream) ([]byte, error) {
 	var d []byte
 	var err error
 	var c Chunk
@@ -460,7 +460,7 @@ func GopCacheNew() GopCache {
 
 //TODO: gop中总的帧减去第2个关键帧的位置, 大于某个值时, 才会把
 //第1个关键帧到第2个关键帧之间的数据删除, 以确保gop中有足够数据快速启播
-func GopCacheUpdate(s *RtmpStream) {
+func GopCacheUpdate(s *Stream) {
 	// 1 当前缓存gop数 GopCacheNum <= GopCacheMax 就直接存入并退出
 	// 1 当前缓存gop数 GopCacheNum > GopCacheMax 要先删除第1个Gop数据(含音频)然后再存入
 	// 第1个关键帧存入时 GopCacheNum = 1
@@ -524,7 +524,7 @@ func GopCacheUpdate(s *RtmpStream) {
 	}
 }
 
-func GopCacheSendRtmp0(p, s *RtmpStream, gop *GopCache) {
+func GopCacheSendRtmp0(p, s *Stream, gop *GopCache) {
 	/*
 		// 1 发送Metadata
 		s.log.Println("<== send Metadata")
@@ -558,7 +558,7 @@ func GopCacheSendRtmp0(p, s *RtmpStream, gop *GopCache) {
 	s.log.Println("<== GopCacheSendRtmp() ok")
 }
 
-func GopCacheSendRtmp(p, s *RtmpStream, gop *GopCache) {
+func GopCacheSendRtmp(p, s *Stream, gop *GopCache) {
 	//goplocks.Lock()
 	var chunkNum, videoChunkNum, audioChunkNum int
 	var lastChunk, videoChunk, audioChunk Chunk

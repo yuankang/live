@@ -400,7 +400,7 @@ type TsInfo struct {
 	TsRecType  int     // 录制类型 取值同 RecordType
 }
 
-func M3u8Update(s *RtmpStream) {
+func M3u8Update(s *Stream) {
 	s.log.Printf("%s done, #EXTINF:%.3f", path.Base(s.TsPath), s.TsExtInfo)
 	if s.TsPath == "" {
 		return
@@ -515,7 +515,7 @@ func M3u8Update(s *RtmpStream) {
 	}
 }
 
-func M3u8Flush(s *RtmpStream) {
+func M3u8Flush(s *Stream) {
 	var n *list.Element
 	for e := s.TsList.Front(); e != nil; e = n {
 		ti := (e.Value).(TsInfo)
@@ -568,7 +568,7 @@ func M3u8Flush(s *RtmpStream) {
 //sps内容里第一个就是0x67, pps内容里第一个就是0x68
 //h264			   sps:674d00, pps:68ee3c
 //h265 vsp:40010c, sps:420101, pps:4401c1
-func PrepareSpsPpsData(s *RtmpStream, c *Chunk) {
+func PrepareSpsPpsData(s *Stream, c *Chunk) {
 	// 前5个字节上面已经处理，AVC sequence header从第6个字节开始
 	// 0x17 0x00 0x00 0x00 0x00 0x01 0x4d 0x00 0x29 0x03 0x01 0x00 0x18
 	// 0x67, 0x4d, 0x0, 0x29, 0x96, 0x35, 0x40, 0xf0, 0x4, 0x4f, 0xcb, 0x37, 0x01, 0x1, 0x1, 0x40, 0x0, 0x0, 0xfa, 0x0, 0x0, 0x17, 0x70, 0x01
@@ -645,7 +645,7 @@ func PrepareSpsPpsData(s *RtmpStream, c *Chunk) {
 }
 
 // NaluLen and NaluData may be not consistent, should parsing chunk data instead of using HevcC data
-func PrepareSpsPpsDataH265(s *RtmpStream, c *Chunk) {
+func PrepareSpsPpsDataH265(s *Stream, c *Chunk) {
 	if len(c.MsgData) < 28 {
 		s.log.Printf("HEVC body no enough data:%v, %x", len(c.MsgData), c.MsgData)
 		return
@@ -817,7 +817,7 @@ type Adts struct {
 
 // ffmpeg-4.4.1/libavcodec/adts_header.c
 // ff_adts_header_parse() ffmpeg中解析adts的代码
-func PrepareAdtsData(s *RtmpStream, c *Chunk) {
+func PrepareAdtsData(s *Stream, c *Chunk) {
 	var AacC AudioSpecificConfig
 	AacC.ObjectType = (c.MsgData[2] & 0xF8) >> 3 // 5bit
 	AacC.SamplingIdx =
@@ -865,7 +865,7 @@ func PrepareAdtsData(s *RtmpStream, c *Chunk) {
 	//s.log.Printf("AdtsData: %x", s.AdtsData)
 }
 
-func ParseAdtsData(s *RtmpStream) Adts {
+func ParseAdtsData(s *Stream) Adts {
 	var adts Adts
 	data := s.AdtsData
 	adts.Syncword = uint16(data[0])<<4 | uint16(data[1])>>4
@@ -1098,7 +1098,7 @@ type Pcr struct {
 //tsPacket固定188byte, tsHeader固定4byte
 //返回tsData和写入tsData的字节数, 也就是data消耗了多少
 //tsHeader(4) + [适应区(2+6)] + [填充数据(x)] + (pat/pmt/pes)数据(x)
-func TsPacketCreate(s *RtmpStream, c Chunk, data []byte, pcr uint64, first bool) ([]byte, int) {
+func TsPacketCreate(s *Stream, c Chunk, data []byte, pcr uint64, first bool) ([]byte, int) {
 	dataLen := len(data)
 
 	var th TsHeader
@@ -1197,7 +1197,7 @@ func TsPacketCreate(s *RtmpStream, c Chunk, data []byte, pcr uint64, first bool)
 	return s.TsPack, dataLen
 }
 
-func TsPacketCreatePatPmt(s *RtmpStream, pid uint16, data []byte) ([]byte, int) {
+func TsPacketCreatePatPmt(s *Stream, pid uint16, data []byte) ([]byte, int) {
 	var th TsHeader
 	th.SyncByte = 0x47                  // 8bit
 	th.TransportErrorIndicator = 0x0    // 1bit
@@ -1231,7 +1231,7 @@ func TsPacketCreatePatPmt(s *RtmpStream, pid uint16, data []byte) ([]byte, int) 
 
 // rtmp里面的数据是ES(h264/aac)裸流, tsFile里是PES
 // rtmp的message转换为pes, 一个pes就是一帧数据(关键帧/非关键帧/音频帧)
-func PesHeaderCreate(s *RtmpStream, c Chunk) (*PesHeader, []byte) {
+func PesHeaderCreate(s *Stream, c Chunk) (*PesHeader, []byte) {
 	//rtmp里的Timestamp是dts 是毫秒
 	dts := uint64(c.Timestamp) * H264ClockFrequency
 	pts := dts
@@ -1361,7 +1361,7 @@ annexb 3B header, 406B nalu(nal_unit_type:1)(non-IDR,P/B)
 //	关键帧: 0x00000001 + 0x67 + sps + 0x00000001 + 0x68 + pps + 0x00000001 + 0x65 + keyFrame(这里可能有多个nalu, 每个nalu前都要有起始码0x00000001)
 //
 // 非关键帧: 0x00000001 + 0x61 + interFrame(这里可能有多个nalu, 每个nalu前都要有起始码0x00000001)
-func PesDataCreateVideoFrame(s *RtmpStream, c Chunk, phd []byte) []byte {
+func PesDataCreateVideoFrame(s *Stream, c Chunk, phd []byte) []byte {
 	pesHeaderDataLen := uint32(len(phd))
 
 	var SpsPpsDataLen uint32
@@ -1462,7 +1462,7 @@ func PesDataCreateVideoFrame(s *RtmpStream, c Chunk, phd []byte) []byte {
 	return data
 }
 
-func PesDataCreateAacFrame(s *RtmpStream, c Chunk, phd []byte) []byte {
+func PesDataCreateAacFrame(s *Stream, c Chunk, phd []byte) []byte {
 	pesHeaderDataLen := uint32(len(phd))
 
 	var MsgDataLen uint32 = 0
@@ -1602,7 +1602,7 @@ type Pmt struct {
 	CRC32                  uint32      // 32bit
 }
 
-func PmtCreate(s *RtmpStream) (*Pmt, []byte) {
+func PmtCreate(s *Stream) (*Pmt, []byte) {
 	var pmt Pmt
 	pmt.TableId = 0x2
 	pmt.SectionSyntaxIndicator = 0x1
@@ -1732,7 +1732,7 @@ func PmtCreate(s *RtmpStream) (*Pmt, []byte) {
 /*************************************************/
 /* tsFile
 /*************************************************/
-func TsFileCreate(s *RtmpStream, c Chunk) {
+func TsFileCreate(s *Stream, c Chunk) {
 	if s.TsPath != "" {
 		s.TsFileBuf.Flush()
 		s.TsFile.Close()
@@ -1799,7 +1799,7 @@ func TsFileCreate(s *RtmpStream, c Chunk) {
 	s.TsLastSeq++
 }
 
-func TsFileAppend(s *RtmpStream, c Chunk) {
+func TsFileAppend(s *Stream, c Chunk) {
 	pesHeader, pesHeaderData := PesHeaderCreate(s, c)
 
 	var pesData []byte
@@ -1858,7 +1858,7 @@ func TsFileAppend(s *RtmpStream, c Chunk) {
 // 24bit, 最大值  0xffffff=  16777215单位毫秒 约为 4.7小时 约为0.20天
 // 32bit, 最大值0xffffffff=4294967295单位毫秒 约为1203小时 约为49.7天
 // 新生成一个ts返回true, 否则返回false
-func TsCreate(s *RtmpStream, c Chunk) bool {
+func TsCreate(s *Stream, c Chunk) bool {
 	var dv uint32
 	if c.Timestamp >= s.TsFirstTs {
 		//时间戳递增: c.Timestamp(46417939) - s.TsFirstTs(46286804) = dv(131135)
@@ -1966,7 +1966,7 @@ func TsCreate(s *RtmpStream, c Chunk) bool {
 /*************************************************/
 /* HlsCreator()
 /*************************************************/
-func HlsCreator(s *RtmpStream) {
+func HlsCreator(s *Stream) {
 	defer s.Wg.Done()
 	var err error
 	dir := fmt.Sprintf("%s/%s", s.HlsStorePath, s.AmfInfo.StreamId)
@@ -2053,7 +2053,7 @@ func HlsCreator(s *RtmpStream) {
 //////////////////////////////////////////////////
 // hlslive
 //////////////////////////////////////////////////
-func HlsLiveClear(dir string, s *RtmpStream) {
+func HlsLiveClear(dir string, s *Stream) {
 	if utils.FileExist(s.M3u8LivePath) == true {
 		modTime, err := utils.GetFileModTime(s.M3u8LivePath)
 		if err != nil {
@@ -2246,7 +2246,7 @@ func HlsLiveClear(dir string, s *RtmpStream) {
 	}
 }
 
-func M3u8LiveUpdate(s *RtmpStream) {
+func M3u8LiveUpdate(s *Stream) {
 	s.log.Printf("hlslive %s done, #EXTINF:%.3f", path.Base(s.TsLivePath), s.TsLiveExtInfo)
 	if s.TsLivePath == "" {
 		return
@@ -2346,7 +2346,7 @@ func M3u8LiveUpdate(s *RtmpStream) {
 	}
 }
 
-func M3u8LiveFlush(s *RtmpStream) {
+func M3u8LiveFlush(s *Stream) {
 	//TODO: last ts not in m3u8
 	//M3u8LiveUpdate(s)
 
@@ -2359,7 +2359,7 @@ func M3u8LiveFlush(s *RtmpStream) {
 	}
 }
 
-func TsLivePacketCreatePatPmt(s *RtmpStream, pid uint16, data []byte) ([]byte, int) {
+func TsLivePacketCreatePatPmt(s *Stream, pid uint16, data []byte) ([]byte, int) {
 	var th TsHeader
 	th.SyncByte = 0x47                  // 8bit
 	th.TransportErrorIndicator = 0x0    // 1bit
@@ -2390,7 +2390,7 @@ func TsLivePacketCreatePatPmt(s *RtmpStream, pid uint16, data []byte) ([]byte, i
 /*************************************************/
 /* tsFile
 /*************************************************/
-func TsLiveFileCreate(s *RtmpStream, c Chunk) {
+func TsLiveFileCreate(s *Stream, c Chunk) {
 	if s.TsLivePath != "" {
 		s.TsLiveFileBuf.Flush()
 		s.TsLiveFile.Close()
@@ -2457,7 +2457,7 @@ func TsLiveFileCreate(s *RtmpStream, c Chunk) {
 	s.TsLiveLastSeq++
 }
 
-func PrepareSpsPpsLiveData(s *RtmpStream, c *Chunk) {
+func PrepareSpsPpsLiveData(s *Stream, c *Chunk) {
 	// 前5个字节上面已经处理，AVC sequence header从第6个字节开始
 	// 0x17 0x00 0x00 0x00 0x00 0x01 0x4d 0x00 0x29 0x03 0x01 0x00 0x18
 	// 0x67, 0x4d, 0x0, 0x29, 0x96, 0x35, 0x40, 0xf0, 0x4, 0x4f, 0xcb, 0x37, 0x01, 0x1, 0x1, 0x40, 0x0, 0x0, 0xfa, 0x0, 0x0, 0x17, 0x70, 0x01
@@ -2534,7 +2534,7 @@ func PrepareSpsPpsLiveData(s *RtmpStream, c *Chunk) {
 }
 
 // NaluLen and NaluData may be not consistent, should parsing chunk data instead of using HevcC data
-func PrepareSpsPpsLiveDataH265(s *RtmpStream, c *Chunk) {
+func PrepareSpsPpsLiveDataH265(s *Stream, c *Chunk) {
 	if len(c.MsgData) < 28 {
 		s.log.Printf("hlslive HEVC body no enough data:%v, %x", len(c.MsgData), c.MsgData)
 		return
@@ -2652,7 +2652,7 @@ func PrepareSpsPpsLiveDataH265(s *RtmpStream, c *Chunk) {
 	}
 }
 
-func PrepareAdtsLiveData(s *RtmpStream, c *Chunk) {
+func PrepareAdtsLiveData(s *Stream, c *Chunk) {
 	var AacC AudioSpecificConfig
 	AacC.ObjectType = (c.MsgData[2] & 0xF8) >> 3 // 5bit
 	AacC.SamplingIdx =
@@ -2700,7 +2700,7 @@ func PrepareAdtsLiveData(s *RtmpStream, c *Chunk) {
 	//s.log.Printf("AdtsLiveData: %x", s.AdtsLiveData)
 }
 
-func PesLiveDataCreateVideoFrame(s *RtmpStream, c Chunk, phd []byte) []byte {
+func PesLiveDataCreateVideoFrame(s *Stream, c Chunk, phd []byte) []byte {
 	pesHeaderDataLen := uint32(len(phd))
 
 	var SpsPpsDataLen uint32 = 0
@@ -2800,7 +2800,7 @@ func PesLiveDataCreateVideoFrame(s *RtmpStream, c Chunk, phd []byte) []byte {
 	return data
 }
 
-func PesLiveDataCreateAacFrame(s *RtmpStream, c Chunk, phd []byte) []byte {
+func PesLiveDataCreateAacFrame(s *Stream, c Chunk, phd []byte) []byte {
 	pesHeaderDataLen := uint32(len(phd))
 
 	var MsgDataLen uint32 = 0
@@ -2836,7 +2836,7 @@ func PesLiveDataCreateAacFrame(s *RtmpStream, c Chunk, phd []byte) []byte {
 	return data
 }
 
-func TsLivePacketCreate(s *RtmpStream, c Chunk, data []byte, pcr uint64, first bool) ([]byte, int) {
+func TsLivePacketCreate(s *Stream, c Chunk, data []byte, pcr uint64, first bool) ([]byte, int) {
 	dataLen := len(data)
 
 	var th TsHeader
@@ -2935,7 +2935,7 @@ func TsLivePacketCreate(s *RtmpStream, c Chunk, data []byte, pcr uint64, first b
 	return s.TsLivePack, dataLen
 }
 
-func TsLiveFileAppend(s *RtmpStream, c Chunk) {
+func TsLiveFileAppend(s *Stream, c Chunk) {
 	pesHeader, pesHeaderData := PesHeaderCreate(s, c)
 
 	var pesData []byte
@@ -2978,7 +2978,7 @@ func TsLiveFileAppend(s *RtmpStream, c Chunk) {
 	}
 }
 
-func TsLiveCreate(s *RtmpStream, c Chunk) bool {
+func TsLiveCreate(s *Stream, c Chunk) bool {
 	var dv uint32
 	if c.Timestamp >= s.TsLiveFirstTs {
 		//时间戳递增: c.Timestamp(46417939) - s.TsLiveFirstTs(46286804) = dv(131135)
@@ -3083,7 +3083,7 @@ func TsLiveCreate(s *RtmpStream, c Chunk) bool {
 	return ok
 }
 
-func HlsLiveCreator(s *RtmpStream) {
+func HlsLiveCreator(s *Stream) {
 	defer s.Wg.Done()
 	dir := fmt.Sprintf("%s/%s", conf.HlsLive.MemPath, s.AmfInfo.StreamId)
 	err := utils.DirExist(dir, true)

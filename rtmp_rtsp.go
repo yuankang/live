@@ -8,7 +8,7 @@ import (
 )
 
 //1 发送sps, pps; 2 发送缓存音视频; 3 发送实时数据;
-func RtspSendRtmpGop(rs *RtmpStream, s *RtspStream) {
+func RtspSendRtmpGop(rs *Stream, s *RtspStream) {
 	s.log.Println(">>> send Rtp Stapa(聚合包) sps_pps <<<")
 	e := rs.GopCache.MediaData.Front()
 	var c *Chunk
@@ -47,7 +47,7 @@ func RtspSendRtmpGop(rs *RtmpStream, s *RtspStream) {
 	s.log.Println("--- send RtmpGopCacheData stop ---")
 }
 
-func RtspSendMediaData(rs *RtmpStream, s *RtspStream, rp *RtpPacket) error {
+func RtspSendMediaData(rs *Stream, s *RtspStream, rp *RtpPacket) error {
 	//s.log.Printf("%#v", rp.RtpHeader)
 
 	id, err := AddInterleavedMode0(rp)
@@ -69,7 +69,7 @@ func RtspSendMediaData(rs *RtmpStream, s *RtspStream, rp *RtpPacket) error {
 	return nil
 }
 
-func RtmpMem2RtspServer(rs *RtmpStream) {
+func RtmpMem2RtspServer(rs *Stream) {
 	s := NewRtspStream(nil)
 	s.log.Println("----------")
 	s.Key = rs.Key

@@ -24,7 +24,7 @@ type RtmpMessage struct {
 //大一点的Chunk减少了计算每个chunk的时间从而减少了CPU的占用率，但是它会占用更多的时间在发送上，尤其是在低带宽的网络情况下，很可能会阻塞后面更重要信息的传输。
 //小一点的Chunk可以减少这种阻塞问题，但小的Chunk会引起过多额外的信息（Chunk中的Header），少量多次的传输也可能会造成发送的间断导致不能充分利用高带宽的优势，因此并不适合在高比特率的流中传输。
 //在实际发送时应对要发送的数据用不同的Chunk Size去尝试，通过抓包分析等手段得出合适的Chunk大小，并且在传输过程中可以根据当前的带宽信息和实际信息的大小动态调Chunk的大小，从而尽量提高CPU的利用率并减少信息的阻塞机率。
-func MessageMerge(s *RtmpStream, c *Chunk) (Chunk, error) {
+func MessageMerge(s *Stream, c *Chunk) (Chunk, error) {
 	var bh, fmt, csid uint32 // basic header
 	var err error
 	var id0, id1 uint32
@@ -103,7 +103,7 @@ func MessageMerge(s *RtmpStream, c *Chunk) (Chunk, error) {
 	}
 }
 
-func MessageSplit(s *RtmpStream, c *Chunk, flush bool) error {
+func MessageSplit(s *Stream, c *Chunk, flush bool) error {
 	var err error
 	if c == nil {
 		err = fmt.Errorf("error: chunk point is nil")
@@ -189,7 +189,7 @@ func MessageTypeCheck(c *Chunk) {
 /*************************************************/
 /* 建连阶段message交互
 /*************************************************/
-func SetRemoteChunkSize(s *RtmpStream) error {
+func SetRemoteChunkSize(s *Stream) error {
 	d := Uint32ToByte(conf.Rtmp.ChunkSize, nil, BE)
 	rc := CreateMessage(MsgTypeIdSetChunkSize, 4, d)
 	err := MessageSplit(s, &rc, false)
@@ -203,7 +203,7 @@ func SetRemoteChunkSize(s *RtmpStream) error {
 
 //{"connect", 1, main.Object{"app":"SP3bnx69BgxI", "swfUrl":"rtmp://127.0.0.1:1935/SP3bnx69BgxI", "tcUrl":"rtmp://127.0.0.1:1935/SP3bnx69BgxI", "type":"nonprivate"}}
 //ffmpeg: {"connect", 1, main.Object{"app":"SPq3pr6f6kNa", "audioCodecs":4071, "capabilities":15, "flashVer":"LNX 9,0,124,2", "fpad":false, "tcUrl":"rtmp://192.168.16.164:1935/SPq3pr6f6kNa", "videoCodecs":252, "videoFunction":1}}
-func SendConnMsg(s *RtmpStream) error {
+func SendConnMsg(s *Stream) error {
 	s.log.Println("<== Send Connect Message")
 
 	info := make(Object)
@@ -229,7 +229,7 @@ func SendConnMsg(s *RtmpStream) error {
 }
 
 //{"createStream", 2, interface {}(nil)}
-func SendCreateStreamMsg(s *RtmpStream) error {
+func SendCreateStreamMsg(s *Stream) error {
 	s.log.Println("<== Send CreateStream Message")
 
 	d, _ := AmfMarshal(s, "createStream", 2, nil)
@@ -247,7 +247,7 @@ func SendCreateStreamMsg(s *RtmpStream) error {
 }
 
 //{"publish", 3, interface {}(nil), "GSP3bnx69BgxI-guCc0oo88s?app=slivegateway&pbto=30", "live"}
-func SendPublishMsg(s *RtmpStream) error {
+func SendPublishMsg(s *Stream) error {
 	s.log.Println("<== Send Publish Message")
 
 	PubName := fmt.Sprintf("%s?pbto=30&%s", s.StreamId, BackDoor)
@@ -268,7 +268,7 @@ func SendPublishMsg(s *RtmpStream) error {
 }
 
 //{"getStreamLength", 3, interface {}(nil), "RSPq3pr6f6kNa-eQW54pIhKb"}
-func SendGetStreamLengthMsg(s *RtmpStream) error {
+func SendGetStreamLengthMsg(s *Stream) error {
 	s.log.Println("<== Send GetStreamLength Message")
 
 	d, _ := AmfMarshal(s, "getStreamLength", 3, nil, s.StreamId)
@@ -286,7 +286,7 @@ func SendGetStreamLengthMsg(s *RtmpStream) error {
 }
 
 //{"play", 4, interface {}(nil), "RSPq3pr6f6kNa-eQW54pIhKb", -2000}
-func SendPlayMsg(s *RtmpStream) error {
+func SendPlayMsg(s *Stream) error {
 	s.log.Println("<== Send Play Message")
 	s.log.Printf("play streamid %s", s.StreamId)
 
@@ -304,7 +304,7 @@ func SendPlayMsg(s *RtmpStream) error {
 	return nil
 }
 
-func RecvMsg(s *RtmpStream) error {
+func RecvMsg(s *Stream) error {
 	err := RtmpHandleMessage(s)
 	if err != nil {
 		s.log.Println(err)
@@ -317,7 +317,7 @@ func RecvMsg(s *RtmpStream) error {
 //rtmp发送数据的时候 message 拆分成 chunk, MessageSplit()
 //rtmp接收数据的时候 chunk 组合成 message, MessageMerge()
 //接收完数据 要对数据处理, MessageHandle()
-func RtmpHandleMessage(s *RtmpStream) error {
+func RtmpHandleMessage(s *Stream) error {
 	var i uint32
 	var err error
 	c := &Chunk{}
@@ -348,7 +348,7 @@ func RtmpHandleMessage(s *RtmpStream) error {
 	return nil
 }
 
-func MessageHandle(s *RtmpStream, c *Chunk) error {
+func MessageHandle(s *Stream, c *Chunk) error {
 	switch c.MsgTypeId {
 	case MsgTypeIdSetChunkSize:
 		s.ChunkSize = ByteToUint32(c.MsgData, BE)
@@ -377,7 +377,7 @@ func MessageHandle(s *RtmpStream, c *Chunk) error {
 }
 
 //rtmp协议要求 接收到一定数量的数据后 要给对方一个回应
-func SendAckMessage(s *RtmpStream, MsgLen uint32) error {
+func SendAckMessage(s *Stream, MsgLen uint32) error {
 	s.RecvMsgLen += MsgLen
 	//s.log.Printf("RecvMsgLen=%d, RemoteWindowAckSize=%d", s.RecvMsgLen, s.RemoteWindowAckSize)
 

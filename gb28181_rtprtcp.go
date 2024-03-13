@@ -50,7 +50,7 @@ type FrameRtp struct {
 //TODO: I/P帧 丢一部分rtp数据 该如何处理
 //TODO: 有些ipc发送的首包 不一定是头信息+IDR, 可能是P帧或音频帧, 这些数据要扔掉
 //1 合并rtp数据并转为RtmpMsg; 2 分发RtmpMsg给播放者;
-func RtpData2RtmpMsg(s *RtmpStream) (*Chunk, error) {
+func RtpData2RtmpMsg(s *Stream) (*Chunk, error) {
 	var rp *RtpPacket
 	var buf bytes.Buffer
 	rtpNum := len(s.FrameRtp.RtpPkgs)
@@ -100,9 +100,9 @@ func RtpData2RtmpMsg(s *RtmpStream) (*Chunk, error) {
 	//轮询发送数据给所有播放者 通过每个播放者的chan
 	//播放者到播放器的网络差 也不会引起这个循环阻塞
 	//详细说明见 RtmpTransmit()
-	var p *RtmpStream //player
+	var p *Stream //player
 	s.Players.Range(func(k, v interface{}) bool {
-		p, _ = v.(*RtmpStream)
+		p, _ = v.(*Stream)
 		s.log.Printf("<== send %s to %s", s.FrameRtp.Type, p.Key)
 		if p.PlayClose == true {
 			s.log.Printf("<== player %s is stop", p.Key)
@@ -199,7 +199,7 @@ func RtpServerUdp() {
 /*************************************************/
 /* rtp tcp
 /*************************************************/
-func RtpHandler(s *RtmpStream) {
+func RtpHandler(s *Stream) {
 	var rps []RtpPacket
 	var rp RtpPacket
 	var ok bool
@@ -284,7 +284,7 @@ func RtpReceiverTcp(c net.Conn) {
 	var d []byte
 	var rp *RtpPacket
 	var err error
-	var s *RtmpStream
+	var s *Stream
 
 	for {
 		//因为tcp会作拆包和粘包的处理, 所以RTP(TCP)比RTP(UDP)多2字节长度信息

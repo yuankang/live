@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func Frame2Chunk(s *RtmpStream, p AvPacket) Chunk {
+func Frame2Chunk(s *Stream, p AvPacket) Chunk {
 	var st time.Time
 	var div time.Duration
 	var nis []NaluInfo
@@ -45,13 +45,13 @@ func Frame2Chunk(s *RtmpStream, p AvPacket) Chunk {
 /*************************************************/
 /* Gb28181媒体数据走内存发送给自己RtmpServer
 /*************************************************/
-func Gb281812Mem2RtmpServer(s *RtmpStream) {
+func Gb281812Mem2RtmpServer(s *Stream) {
 }
 
 /*************************************************/
 /* Gb28181媒体数据走网络发送给别的RtmpServer
 /*************************************************/
-func Gb28181Net2RtmpServer(s *RtmpStream) {
+func Gb28181Net2RtmpServer(s *Stream) {
 	c, err := net.Dial("tcp", "127.0.0.1:1935")
 	if err != nil {
 		s.log.Println(err)
@@ -59,14 +59,14 @@ func Gb28181Net2RtmpServer(s *RtmpStream) {
 	}
 	//defer c.Close()
 
-	sm, err := NewRtmpStream(c)
+	sm, err := NewStream(c)
 	if err != nil {
 		sm.log.Println(err)
 		return
 	}
 
 	/*
-		s.StreamType = "RtmpPusher"
+		s.Type = "RtmpPusher"
 		s.RemoteAddr = addr
 		s.RemoteIp = ip
 		s.RemotePort = port

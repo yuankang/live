@@ -67,7 +67,7 @@ type PesHeader struct {
 	Pcr                   uint64 //不是包结构成员, 只是方便编码
 }
 
-func ParseOptPesHeader(s *RtmpStream, r *bytes.Reader) (*OptPesHeader, int) {
+func ParseOptPesHeader(s *Stream, r *bytes.Reader) (*OptPesHeader, int) {
 	var oph OptPesHeader
 	var n int
 
@@ -121,7 +121,7 @@ func ParseOptPesHeader(s *RtmpStream, r *bytes.Reader) (*OptPesHeader, int) {
 	return &oph, n
 }
 
-func ParseOptTs(s *RtmpStream, r *bytes.Reader, oph *OptPesHeader) int {
+func ParseOptTs(s *Stream, r *bytes.Reader, oph *OptPesHeader) int {
 	var oPts OptTs
 	var oDts OptTs
 	var n int
@@ -164,7 +164,7 @@ func ParseOptTs(s *RtmpStream, r *bytes.Reader, oph *OptPesHeader) int {
 /*************************************************/
 /* pes audio
 /*************************************************/
-func ParseAudio(s *RtmpStream, rp *RtpPacket, r *bytes.Reader) (int, error) {
+func ParseAudio(s *Stream, rp *RtpPacket, r *bytes.Reader) (int, error) {
 	/*
 		d, err := ioutil.ReadAll(r)
 		if err != nil {
@@ -186,7 +186,7 @@ func ParseAudio(s *RtmpStream, rp *RtpPacket, r *bytes.Reader) (int, error) {
 /*************************************************/
 /* pes video
 /*************************************************/
-func ParseVideoTrailing(s *RtmpStream, r *bytes.Reader, rp *RtpPacket) (int, error) {
+func ParseVideoTrailing(s *Stream, r *bytes.Reader, rp *RtpPacket) (int, error) {
 	/*
 		d, err := ioutil.ReadAll(r)
 		if err != nil {
@@ -205,7 +205,7 @@ func ParseVideoTrailing(s *RtmpStream, r *bytes.Reader, rp *RtpPacket) (int, err
 	return 0, nil
 }
 
-func ParseVideo(s *RtmpStream, rp *RtpPacket, r *bytes.Reader) (int, error) {
+func ParseVideo(s *Stream, rp *RtpPacket, r *bytes.Reader) (int, error) {
 	/*
 		var ps PesHeader
 		ps.PacketStartCodePrefix = 0x000001
@@ -274,7 +274,7 @@ func ParseVideo(s *RtmpStream, rp *RtpPacket, r *bytes.Reader) (int, error) {
 	return 0, nil
 }
 
-func VideoHandlerH264(s *RtmpStream, rp *RtpPacket, d []byte) (int, error) {
+func VideoHandlerH264(s *Stream, rp *RtpPacket, d []byte) (int, error) {
 	/*
 		var nh NaluHeader
 		nh.ForbiddenZeroBit = (d[4] >> 7) & 0x1
@@ -323,7 +323,7 @@ func VideoHandlerH264(s *RtmpStream, rp *RtpPacket, d []byte) (int, error) {
 	return 0, nil
 }
 
-func VideoHandlerH265(s *RtmpStream, rp *RtpPacket, d []byte) (int, error) {
+func VideoHandlerH265(s *Stream, rp *RtpPacket, d []byte) (int, error) {
 	return 0, nil
 }
 
@@ -340,7 +340,7 @@ type RtmpMsgData struct {
 	Data            []byte
 }
 
-func CreateVideoHeader(dev *RtmpStream) []byte {
+func CreateVideoHeader(dev *Stream) []byte {
 	var AvcC AVCDecoderConfigurationRecord
 	AvcC.ConfigurationVersion = 0x1
 	AvcC.AVCProfileIndication = 0x4d
@@ -389,7 +389,7 @@ func CreateVideoHeader(dev *RtmpStream) []byte {
 	return d
 }
 
-func UpdateVideoHeader(s *RtmpStream) error {
+func UpdateVideoHeader(s *Stream) error {
 	//1 生成VideoHeader结构体和数据
 	d := CreateVideoHeader(s)
 	//1 增加AvcVideoPacket包装
@@ -405,7 +405,7 @@ func UpdateVideoHeader(s *RtmpStream) error {
 	return nil
 }
 
-func UpdateAudioHeader(dev *RtmpStream) []byte {
+func UpdateAudioHeader(dev *Stream) []byte {
 	var AacC AudioSpecificConfig
 	AacC.ObjectType = 0
 	AacC.SamplingIdx = 0

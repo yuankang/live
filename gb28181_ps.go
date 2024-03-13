@@ -27,7 +27,7 @@ type PsHeader struct {
 	StuffingByte       []byte //8bit,  填充字节 0xff
 }
 
-func ParsePsHeader(s *RtmpStream, rp *RtpPacket, r *bytes.Reader) (int, error) {
+func ParsePsHeader(s *Stream, rp *RtpPacket, r *bytes.Reader) (int, error) {
 	var ph PsHeader
 	var n int
 
@@ -123,7 +123,7 @@ type PsSysBound struct {
 	PStdBufferSizeBound  uint16 //13bit, 缓冲区大小界限, 若P-STD_buffer_bound_scale的值为'0'，则该字段以128字节为单位来度量缓冲区大小的边界。若P-STD_buffer_bound_scale的值为'1'，则该字段以1024字节为单位来度量缓冲区大小的边界。
 }
 
-func ParsePsSysHeader(s *RtmpStream, rp *RtpPacket, r *bytes.Reader) (int, error) {
+func ParsePsSysHeader(s *Stream, rp *RtpPacket, r *bytes.Reader) (int, error) {
 	var psh PsSystemHeader
 	var n int
 
@@ -207,7 +207,7 @@ type PgmStreamInfo struct {
 	DescriptorData     []byte
 }
 
-func ParsePgmStreamMap(s *RtmpStream, rp *RtpPacket, r *bytes.Reader) (int, error) {
+func ParsePgmStreamMap(s *Stream, rp *RtpPacket, r *bytes.Reader) (int, error) {
 	var psm PgmStreamMap
 	var n int
 
@@ -246,7 +246,7 @@ func ParsePgmStreamMap(s *RtmpStream, rp *RtpPacket, r *bytes.Reader) (int, erro
 	return n, nil
 }
 
-func ParsePgmStreamInfo(s *RtmpStream, r *bytes.Reader) int {
+func ParsePgmStreamInfo(s *Stream, r *bytes.Reader) int {
 	var sm PgmStreamInfo
 	var n int
 
@@ -293,7 +293,7 @@ func ParsePgmStreamInfo(s *RtmpStream, r *bytes.Reader) int {
 /*************************************************/
 /* ParsePs
 /*************************************************/
-func IsTrailing(s *RtmpStream, scb []byte) bool {
+func IsTrailing(s *Stream, scb []byte) bool {
 	sc := ByteToUint32(scb, BE)
 	//s.log.Printf("StartCode:%#08x", sc)
 	switch sc {
@@ -307,7 +307,7 @@ func IsTrailing(s *RtmpStream, scb []byte) bool {
 	return true
 }
 
-func ParsePs(s *RtmpStream, rp *RtpPacket) error {
+func ParsePs(s *Stream, rp *RtpPacket) error {
 	/*
 		r := bytes.NewReader(rp.Data[rp.UseNum:])
 

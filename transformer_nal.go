@@ -181,7 +181,7 @@ len=17166, main.NaluHeader{ForbiddenZeroBit:0x0, NalRefIdc:0x2, NalUnitType:0x1}
 MsgLen=17179
 naluNum=2
 */
-func GetNaluNum(rs *RtmpStream, c *Chunk, vc string) (uint32, []byte) {
+func GetNaluNum(rs *Stream, c *Chunk, vc string) (uint32, []byte) {
 	//前5个字节上面已经处理，从第6个字节开始
 	//0x00, 0x00, 0x60, 0x50 为naluLen的值
 	//iframe naluLen=24656
@@ -629,7 +629,7 @@ func SpsParse(data []byte) (*Sps, error) {
 	return &sps, nil
 }
 
-func SpsParse0(s *RtmpStream, data []byte) (*Sps, error) {
+func SpsParse0(s *Stream, data []byte) (*Sps, error) {
 	s.log.Printf("SpsData1:%d, %x", len(data), data)
 	d := PreventionCodeWipe(data)
 	s.log.Printf("SpsData2:%d, %x", len(d), d)
@@ -1103,7 +1103,7 @@ func ProfileTierLevel(data []byte, sBit *uint, sps SpsH265) error {
 // 7a 60 00 89 bc 40
 // H265编码 SPS分析
 // https://blog.csdn.net/sunlifeall/article/details/118437033
-func SpsParseH265(s *RtmpStream, data []byte) (*SpsH265, error) {
+func SpsParseH265(s *Stream, data []byte) (*SpsH265, error) {
 	s.log.Printf("SpsData1:%d, %x", len(data), data)
 	d := PreventionCodeWipe(data)
 	s.log.Printf("SpsData2:%d, %x", len(d), d)

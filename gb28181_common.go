@@ -1,6 +1,7 @@
 package main
 
 import (
+	"container/list"
 	"fmt"
 	"log"
 	"sync"
@@ -11,11 +12,11 @@ type Gb28181Stream struct {
 
 //streamlog/GSP3bnx69BgxI-guCc0oo88s/publish_rtp_20230406.log
 //streamlog/GSP3bnx69BgxI-guCc0oo88s/play_rtmp_192.168.109.57:50471.log
-func NewGb28181Stream(key string, rqst GbRqst) (*RtmpStream, error) {
-	var s RtmpStream
+func NewGb28181Stream(key string, rqst GbRqst) (*Stream, error) {
+	var s Stream
 	/*
 		s.Key = key
-		s.Type = "GbPublisher"
+		s.Type = "GbPub"
 		s.GbRqst = rqst
 
 		s.LogFn = fmt.Sprintf("%s/%s/publish_rtp_%s.log", conf.Log.StreamPath, rqst.StreamId, utils.GetYMD())
@@ -39,13 +40,13 @@ func NewGb28181Stream(key string, rqst GbRqst) (*RtmpStream, error) {
 //由于map不能同时有2个key
 //所以最总 使用两个map来存放 并且 增加互相查找的函数
 //StreamMap key:StreamId, val:Stream
-//SsrcMap   key:uint32,	  val:*RtmpStream
+//SsrcMap   key:uint32,	  val:*Stream
 var (
 	StreamMap sync.Map
 	SsrcMap   sync.Map
 )
 
-func SsrcFindStream(ssrc uint32) (*RtmpStream, error) {
+func SsrcFindStream(ssrc uint32) (*Stream, error) {
 	var err error
 	v, ok := SsrcMap.Load(ssrc)
 	if ok == false {
@@ -53,7 +54,7 @@ func SsrcFindStream(ssrc uint32) (*RtmpStream, error) {
 		log.Println(err)
 		return nil, err
 	}
-	s := v.(*RtmpStream)
+	s := v.(*Stream)
 
 	log.Printf("ssrc %.10d is %s", ssrc, s.Key)
 	return s, nil
@@ -64,8 +65,13 @@ func SsrcFindStream(ssrc uint32) (*RtmpStream, error) {
 //这样可以精确的给frame分配空间, 因为收到第一个frameSeg时, 不知道整个frame大小
 //组装的frame放入到GopCache里, 并且把frame发送给 现有的播放连接
 //新播放连接, 先发送GopCache里的数据, 然后等待发送下个frame
-type GbPublisher struct {
+type GbPub struct {
 	GbRqst //cc发送的国标GB1818流的任务信息
+
+	RtpPktList        list.List  //缓存收到的rtp包
+	RtpPktListHeadSeq uint16     //rtplist首节点的rtpseq值
+	RtpPktListTailSeq uint16     //rtplist尾节点的rtpseq值
+	RtpPktListMutex   sync.Mutex //rtplist锁, 防止插入和删除并发
 
 	RtpSeqNeed  uint16   //期待的rtp包序号
 	RtpSeqWait  uint16   //期待的rtp包序号, 等了多少次

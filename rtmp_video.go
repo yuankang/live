@@ -11,7 +11,7 @@ import (
 /* metadata
 /*************************************************/
 //Metadata 数据要缓存起来，发送给播放者
-func MetadataHandle(s *RtmpStream, c *Chunk) error {
+func MetadataHandle(s *Stream, c *Chunk) error {
 	c.DataType = "Metadata"
 	r := bytes.NewReader(c.MsgData)
 	vs, err := AmfUnmarshal(s, r) // 序列化转结构化
@@ -116,7 +116,7 @@ type HEVCDecoderConfigurationRecord struct {
 /*************************************************/
 /* video h264
 /*************************************************/
-func VideoHandleH264(s *RtmpStream, c *Chunk) error {
+func VideoHandleH264(s *Stream, c *Chunk) error {
 	var err error
 	if len(c.MsgData) < 2 {
 		err = fmt.Errorf("AVC body no enough data")
@@ -389,7 +389,7 @@ func VideoHandleH264(s *RtmpStream, c *Chunk) error {
 /*************************************************/
 /* video h265
 /*************************************************/
-func VideoHandleH265(s *RtmpStream, c *Chunk) error {
+func VideoHandleH265(s *Stream, c *Chunk) error {
 	var err error
 	if len(c.MsgData) < 2 {
 		err = fmt.Errorf("HEVC body no enough data")
@@ -659,7 +659,7 @@ func VideoHandleH265(s *RtmpStream, c *Chunk) error {
 // AVCDecoderConfigurationRecord 包含着是H.264解码相关比较重要的sps和pps信息，再给AVC解码器送数据流之前一定要把sps和pps信息送出，否则的话解码器不能正常解码。
 // 而且在解码器stop之后再次start之前，如seek、快进快退状态切换等，都需要重新送一遍sps和pps的信息.
 // AVCDecoderConfigurationRecord在FLV文件中一般情况也是出现1次，也就是第一个 video tag.
-func VideoHandle(s *RtmpStream, c *Chunk) error {
+func VideoHandle(s *Stream, c *Chunk) error {
 	var err error
 	if len(c.MsgData) < 1 {
 		err = fmt.Errorf("video body has no data")

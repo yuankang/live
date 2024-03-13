@@ -26,7 +26,7 @@ func RtspMem2RtmpServer(rs *RtspStream) {
 //4 发送video data(1B+1B+3B+4字节长度+naluHeader+naluData)
 //5 发送audio data(1B+1B+不带adts的aacData)
 //6 音频要统一转码为aac 11025Hz s16 单声道
-func RtmpSendMetadata(rs *RtspStream, s *RtmpStream) error {
+func RtmpSendMetadata(rs *RtspStream, s *Stream) error {
 	//onMetaData define video_file_format_spec_v10.pdf
 	s.log.Println("<== Send Metadata")
 	info := make(Object)
@@ -55,7 +55,7 @@ func RtmpSendMetadata(rs *RtspStream, s *RtmpStream) error {
 	return nil
 }
 
-func RtmpSendVideoSeqHeader(rs *RtspStream, s *RtmpStream) error {
+func RtmpSendVideoSeqHeader(rs *RtspStream, s *Stream) error {
 	spsData := rs.SpsData
 	ppsData := rs.PpsData
 	if spsData == nil {
@@ -191,7 +191,7 @@ func AudioGetSamplingIdx(s int) int {
 	}
 }
 
-func RtmpSendAudioSeqHeader(rs *RtspStream, s *RtmpStream) error {
+func RtmpSendAudioSeqHeader(rs *RtspStream, s *Stream) error {
 	var adh RtmpAudioDataHeader
 	//FIXME 依据情况设置参数
 	adh.SoundFormat = 10  //4bit, 2:mp3, 10:aac
@@ -245,7 +245,7 @@ func RtmpSendAudioSeqHeader(rs *RtspStream, s *RtmpStream) error {
 	return nil
 }
 
-func RtmpSendMediaData(rs *RtspStream, s *RtmpStream, p *AvPacket) error {
+func RtmpSendMediaData(rs *RtspStream, s *Stream, p *AvPacket) error {
 	var n, l, sl, dl int
 	var d []byte
 	var TypeId uint32

@@ -56,7 +56,7 @@ type Object map[string]interface{}
 
 // AMF是Adobe开发的二进制通信协议, 有两种版本 AMF0 和 AMF3
 // 序列化转结构化 AmfUnmarshal();  结构化转序列化 AmfMarshal();
-func AmfHandle(s *RtmpStream, c *Chunk) error {
+func AmfHandle(s *Stream, c *Chunk) error {
 	r := bytes.NewReader(c.MsgData)
 	vs, err := AmfUnmarshal(s, r) // 序列化转结构化
 	//这个 && 不能动 ???
@@ -128,7 +128,7 @@ func AmfHandle(s *RtmpStream, c *Chunk) error {
 /*************************************************/
 /* amf decode
 /*************************************************/
-func AmfUnmarshal(s *RtmpStream, r io.Reader) ([]interface{}, error) {
+func AmfUnmarshal(s *Stream, r io.Reader) ([]interface{}, error) {
 	var vs []interface{}
 	var v interface{}
 	var err error
@@ -147,7 +147,7 @@ func AmfUnmarshal(s *RtmpStream, r io.Reader) ([]interface{}, error) {
 	return vs, err
 }
 
-func AmfDecode(s *RtmpStream, r io.Reader) (interface{}, error) {
+func AmfDecode(s *Stream, r io.Reader) (interface{}, error) {
 	t, err := ReadUint8(r)
 	if err != nil {
 		if err != io.EOF {
@@ -176,7 +176,7 @@ func AmfDecode(s *RtmpStream, r io.Reader) (interface{}, error) {
 	return nil, err
 }
 
-func Amf0DecodeNumber(s *RtmpStream, r io.Reader) (float64, error) {
+func Amf0DecodeNumber(s *Stream, r io.Reader) (float64, error) {
 	var ret float64
 	err := binary.Read(r, binary.BigEndian, &ret)
 	if err != nil {
@@ -189,7 +189,7 @@ func Amf0DecodeNumber(s *RtmpStream, r io.Reader) (float64, error) {
 	return ret, nil
 }
 
-func Amf0DecodeBoolean(s *RtmpStream, r io.Reader) (bool, error) {
+func Amf0DecodeBoolean(s *Stream, r io.Reader) (bool, error) {
 	var ret bool
 	err := binary.Read(r, binary.BigEndian, &ret)
 	if err != nil {
@@ -202,7 +202,7 @@ func Amf0DecodeBoolean(s *RtmpStream, r io.Reader) (bool, error) {
 	return ret, nil
 }
 
-func Amf0DecodeString(s *RtmpStream, r io.Reader) (string, error) {
+func Amf0DecodeString(s *Stream, r io.Reader) (string, error) {
 	len, err := ReadUint32(r, 2, BE)
 	if err != nil {
 		if err != io.EOF {
@@ -216,7 +216,7 @@ func Amf0DecodeString(s *RtmpStream, r io.Reader) (string, error) {
 	return ret, nil
 }
 
-func Amf0DecodeObject(s *RtmpStream, r io.Reader) (Object, error) {
+func Amf0DecodeObject(s *Stream, r io.Reader) (Object, error) {
 	var len uint32
 	var key string
 	var v interface{}
@@ -252,11 +252,11 @@ func Amf0DecodeObject(s *RtmpStream, r io.Reader) (Object, error) {
 	return ret, nil
 }
 
-func Amf0DecodeNull(s *RtmpStream, r io.Reader) (interface{}, error) {
+func Amf0DecodeNull(s *Stream, r io.Reader) (interface{}, error) {
 	return nil, nil
 }
 
-func Amf0DecodeEcmaArray(s *RtmpStream, r io.Reader) (Object, error) {
+func Amf0DecodeEcmaArray(s *Stream, r io.Reader) (Object, error) {
 	//len, err := ReadUint32(r, 4, BE)
 	_, err := ReadUint32(r, 4, BE)
 	if err != nil {
@@ -282,7 +282,7 @@ func Amf0DecodeEcmaArray(s *RtmpStream, r io.Reader) (Object, error) {
 /*************************************************/
 /* amf encode
 /*************************************************/
-func AmfMarshal(s *RtmpStream, args ...interface{}) ([]byte, error) {
+func AmfMarshal(s *Stream, args ...interface{}) ([]byte, error) {
 	buf := bytes.NewBuffer(nil)
 	var err error
 	for _, v := range args {
@@ -295,7 +295,7 @@ func AmfMarshal(s *RtmpStream, args ...interface{}) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func AmfEncode(s *RtmpStream, buf io.Writer, v interface{}) (int, error) {
+func AmfEncode(s *Stream, buf io.Writer, v interface{}) (int, error) {
 	if v == nil {
 		return Amf0EncodeNull(s, buf)
 	}
@@ -321,7 +321,7 @@ func AmfEncode(s *RtmpStream, buf io.Writer, v interface{}) (int, error) {
 	return 0, err
 }
 
-func Amf0EncodeNull(s *RtmpStream, buf io.Writer) (int, error) {
+func Amf0EncodeNull(s *Stream, buf io.Writer) (int, error) {
 	b := []byte{Amf0MarkerNull}
 	n, err := buf.Write(b)
 	if err != nil {
@@ -331,7 +331,7 @@ func Amf0EncodeNull(s *RtmpStream, buf io.Writer) (int, error) {
 	return n, nil
 }
 
-func Amf0EncodeString(s *RtmpStream, buf io.Writer, v string, wType bool) (int, error) {
+func Amf0EncodeString(s *Stream, buf io.Writer, v string, wType bool) (int, error) {
 	var n int
 	if wType {
 		b := []byte{Amf0MarkerString}
@@ -351,7 +351,7 @@ func Amf0EncodeString(s *RtmpStream, buf io.Writer, v string, wType bool) (int, 
 	return n + m, nil
 }
 
-func Amf0EncodeBool(s *RtmpStream, buf io.Writer, v bool) (int, error) {
+func Amf0EncodeBool(s *Stream, buf io.Writer, v bool) (int, error) {
 	var n int
 	b := []byte{Amf0MarkerBoolen}
 	buf.Write(b)
@@ -370,7 +370,7 @@ func Amf0EncodeBool(s *RtmpStream, buf io.Writer, v bool) (int, error) {
 	return n + m, nil
 }
 
-func Amf0EncodeNumber(s *RtmpStream, buf io.Writer, v float64) (int, error) {
+func Amf0EncodeNumber(s *Stream, buf io.Writer, v float64) (int, error) {
 	var n int
 	b := []byte{Amf0MarkerNumber}
 	buf.Write(b)
@@ -384,7 +384,7 @@ func Amf0EncodeNumber(s *RtmpStream, buf io.Writer, v float64) (int, error) {
 	return n + 8, nil
 }
 
-func Amf0EncodeObject(s *RtmpStream, buf io.Writer, o Object) (int, error) {
+func Amf0EncodeObject(s *Stream, buf io.Writer, o Object) (int, error) {
 	var n, m int
 	var err error
 	b := []byte{Amf0MarkerObject}
@@ -436,7 +436,7 @@ func CreateMessage(TypeId, Len uint32, Data []byte) Chunk {
 	}
 }
 
-func AmfConnectHandle(s *RtmpStream, vs []interface{}) error {
+func AmfConnectHandle(s *Stream, vs []interface{}) error {
 	for _, v := range vs {
 		switch v.(type) {
 		case string:
@@ -466,7 +466,7 @@ func AmfConnectHandle(s *RtmpStream, vs []interface{}) error {
 	return nil
 }
 
-func AmfConnectResponse(s *RtmpStream, c *Chunk) error {
+func AmfConnectResponse(s *Stream, c *Chunk) error {
 	// 1 Window Acknowledge Size
 	// 2 Set Peer BandWidth
 	// 3 Set ChunkSize
@@ -538,7 +538,7 @@ func AmfConnectResponse(s *RtmpStream, c *Chunk) error {
 	return nil
 }
 
-func AmfCreateStreamHandle(s *RtmpStream, vs []interface{}) error {
+func AmfCreateStreamHandle(s *Stream, vs []interface{}) error {
 	for _, v := range vs {
 		switch v.(type) {
 		case string:
@@ -551,7 +551,7 @@ func AmfCreateStreamHandle(s *RtmpStream, vs []interface{}) error {
 	return nil
 }
 
-func AmfCreateStreamResponse(s *RtmpStream, c *Chunk) error {
+func AmfCreateStreamResponse(s *Stream, c *Chunk) error {
 	s.log.Println("<---- CreateStreamMessageResponse")
 	d, _ := AmfMarshal(s, "_result", s.AmfInfo.TransactionId, nil, c.MsgStreamId)
 	//s.log.Println(d)
@@ -567,7 +567,7 @@ func AmfCreateStreamResponse(s *RtmpStream, c *Chunk) error {
 	return nil
 }
 
-func AmfPublishHandle(s *RtmpStream, vs []interface{}) error {
+func AmfPublishHandle(s *Stream, vs []interface{}) error {
 	for k, v := range vs {
 		switch v.(type) {
 		case string:
@@ -590,7 +590,7 @@ func AmfPublishHandle(s *RtmpStream, vs []interface{}) error {
 	return nil
 }
 
-func AmfPublishResponse(s *RtmpStream, c *Chunk) error {
+func AmfPublishResponse(s *Stream, c *Chunk) error {
 	s.log.Println("<---- PublishMessageResponse")
 	info := make(Object)
 	info["level"] = "status"
@@ -612,7 +612,7 @@ func AmfPublishResponse(s *RtmpStream, c *Chunk) error {
 	return nil
 }
 
-func AmfPlayHandle(s *RtmpStream, vs []interface{}) error {
+func AmfPlayHandle(s *Stream, vs []interface{}) error {
 	for k, v := range vs {
 		switch v.(type) {
 		case string:
@@ -649,7 +649,7 @@ func AmfPlayHandle(s *RtmpStream, vs []interface{}) error {
 // StreamIsRecorded	(=4)
 // PingRequest		(=6)
 // PingResponse		(=5)
-func AmfPlayResponse(s *RtmpStream, c *Chunk) error {
+func AmfPlayResponse(s *Stream, c *Chunk) error {
 	s.log.Println("<---- PlayMessageResponse")
 	// 1 send User Control Message EventType = 4
 	// 2 send User Control Message EventType = 0

@@ -483,7 +483,7 @@ type RtpPacket struct {
 }
 
 //StreamId_20230225124550_rtp.rec
-func RtpRec(s *RtmpStream) {
+func RtpRec(s *Stream) {
 	fn := fmt.Sprintf("%s/%s_%s_rtp.rec", conf.StreamRec.SavePath, s.StreamId, utils.GetYMDHMS())
 	s.log.Printf("RtpRec: %s", fn)
 
@@ -833,7 +833,7 @@ func RtpStapaPktCreate(rs *RtspStream, sps, pps []byte, ts uint32) (*RtpPacket, 
 	return rp, nil
 }
 
-func RtpPkgCreate(rs *RtmpStream, s *RtspStream, c *Chunk) ([]*RtpPacket, error) {
+func RtpPkgCreate(rs *Stream, s *RtspStream, c *Chunk) ([]*RtpPacket, error) {
 	n := c.MsgLength / 1460
 	if c.MsgLength%1460 != 0 {
 		n++

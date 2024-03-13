@@ -369,7 +369,7 @@ func SipHandlerUdp(l *net.UDPConn) {
 		}
 
 		switch sr.CSeq {
-		case "CSeq: 1 REGISTER":
+		case "1 REGISTER":
 			rsps = SipRegister1Rsps(sr)
 		case "2 REGISTER":
 			rsps = SipRegister2Rsps(sr)

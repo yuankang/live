@@ -45,7 +45,7 @@ var (
 // n = offset的值
 // 简单握手时c2(1536): time(4) + time(4) + randomEcho(1528)
 // 复杂握手时c2(1536): randomData(1504) + digestData(32)
-func CreateComplexS1S2(s *RtmpStream, C1, S1, S2 []byte) error {
+func CreateComplexS1S2(s *Stream, C1, S1, S2 []byte) error {
 	// 发起rtmp连接的一方key用FPKeyP，被连接的一方key用FMSKeyP
 	// 1 重新计算C1的digest和C1中的digest比较,一样才行
 	// 2 计算S1的digest
@@ -107,7 +107,7 @@ func DigestCreate(b []byte, pos int, key []byte) []byte {
 	return h.Sum(nil)
 }
 
-func DigestFind(s *RtmpStream, C1 []byte, base int) []byte {
+func DigestFind(s *Stream, C1 []byte, base int) []byte {
 	pos := DigestFindPos(C1, base)
 	c1Digest := DigestCreate(C1, pos, FPKeyP)
 	//s.log.Println("c1Digest in C1:", C1[pos:pos+32])
@@ -118,7 +118,7 @@ func DigestFind(s *RtmpStream, C1 []byte, base int) []byte {
 	return nil
 }
 
-func RtmpHandshakeServer(s *RtmpStream) error {
+func RtmpHandshakeServer(s *Stream) error {
 	var err error
 	var C0C1C2S0S1S2 [(1 + 1536*2) * 2]byte
 
@@ -177,7 +177,7 @@ func RtmpHandshakeServer(s *RtmpStream) error {
 /*************************************************/
 /* RtmpHandshakeClient
 /*************************************************/
-func RtmpHandshakeClient(s *RtmpStream) error {
+func RtmpHandshakeClient(s *Stream) error {
 	var C0C1C2S0S1S2 [(1 + 1536*2) * 2]byte
 
 	C0C1C2 := C0C1C2S0S1S2[:1536*2+1]

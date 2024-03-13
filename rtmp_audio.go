@@ -53,7 +53,7 @@ type AudioSpecificConfig struct {
 	ExtensionFlag   uint8 //1bit, 一般为0
 }
 
-func AudioHandle(s *RtmpStream, c *Chunk) error {
+func AudioHandle(s *Stream, c *Chunk) error {
 	var err error
 	if len(c.MsgData) < 2 {
 		err = fmt.Errorf("audio body has no data")

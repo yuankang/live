@@ -156,10 +156,10 @@ func PuberLogCutoffTimer() {
 	log.Printf("=== slepp %d second, cutoff publish log ===", iTime)
 	time.Sleep(time.Second * time.Duration(iTime))
 
-	var p *RtmpStream
+	var p *Stream
 	for {
 		StreamMap.Range(func(k, v interface{}) bool {
-			p, _ = v.(*RtmpStream)
+			p, _ = v.(*Stream)
 			p.LogCutoff = true
 			return true
 		})
@@ -171,7 +171,7 @@ func PuberLogCutoffTimer() {
 
 //该协程启动时获取系统时间, 算出到24:00的时间差(之后的时间差都是1天)
 //sleep时间差, 然后 通过chan 发送日志切割消息给
-func LogCutoffAction(s *RtmpStream, pType string) error {
+func LogCutoffAction(s *Stream, pType string) error {
 	/*
 		folder := fmt.Sprintf("%s/%s", conf.Log.StreamLogPath, s.AmfInfo.StreamId)
 		fn := fmt.Sprintf("%s/publish_%s_%s.log", folder, pType, utils.GetYMD())

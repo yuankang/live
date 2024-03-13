@@ -38,7 +38,7 @@ type TrafficRsps struct {
 	Msg  string `json:"message"`
 }
 
-func TrafficReport(s *RtmpStream, ti TrafficInfo, dataType, dataProtocol string) {
+func TrafficReport(s *Stream, ti TrafficInfo, dataType, dataProtocol string) {
 	var rqst TrafficRqst
 	rqst.App = "sliveserver"
 	rqst.StreamId = s.AmfInfo.StreamId

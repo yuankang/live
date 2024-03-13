@@ -21,10 +21,10 @@ const (
 type FlvStream struct {
 }
 
-func NewFlvStream(addr string) *RtmpStream {
+func NewFlvStream(addr string) *Stream {
 	ip := strings.Split(addr, ":")
 
-	s := &RtmpStream{
+	s := &Stream{
 		RemoteAddr: addr,
 		RemoteIp:   ip[0],
 		NewPlayer:  true,
@@ -36,7 +36,7 @@ func NewFlvStream(addr string) *RtmpStream {
 /* http-flv
 /**********************************************************/
 // chan接收数据, http-flv发送数据
-func FlvTransmit(p *RtmpStream, s *RtmpStream, exitChan chan int, w http.ResponseWriter, bitrate uint32) {
+func FlvTransmit(p *Stream, s *Stream, exitChan chan int, w http.ResponseWriter, bitrate uint32) {
 	var c *Chunk
 	var ok bool
 	var err error
@@ -93,7 +93,7 @@ func FlvTransmit(p *RtmpStream, s *RtmpStream, exitChan chan int, w http.Respons
 	}
 }
 
-func FlvStop(s *RtmpStream) {
+func FlvStop(s *Stream) {
 	if s == nil {
 		return
 	}
@@ -182,10 +182,10 @@ func GetFlv(w http.ResponseWriter, r *http.Request) ([]byte, error) {
 		}
 	}
 
-	p, _ := v.(*RtmpStream)
+	p, _ := v.(*Stream)
 
 	s := NewFlvStream(addr)
-	s.StreamType = "flvPlayer"
+	s.Type = "flvPlayer"
 	s.AmfInfo.App = app
 	s.AmfInfo.StreamId = sid
 	s.IsPublisher = false
@@ -293,7 +293,7 @@ type FlvData struct {
 	Tags []FlvTag
 }
 
-func MetaSendFlv(pub, s *RtmpStream) error {
+func MetaSendFlv(pub, s *Stream) error {
 	var h FlvHeader
 	h.Signature0 = 0x46
 	h.Signature1 = 0x4c
@@ -343,7 +343,7 @@ func MetaSendFlv(pub, s *RtmpStream) error {
 }
 
 // pub是发布者, s是播放者
-func GopCacheFastlowSendFlv(pub, s *RtmpStream, gop *GopCache) error {
+func GopCacheFastlowSendFlv(pub, s *Stream, gop *GopCache) error {
 	var h FlvHeader
 	h.Signature0 = 0x46
 	h.Signature1 = 0x4c
@@ -496,7 +496,7 @@ func GopCacheFastlowSendFlv(pub, s *RtmpStream, gop *GopCache) error {
 }
 
 // pub是发布者, s是播放者
-func GopCacheSendFlv(pub, s *RtmpStream, gop *GopCache) error {
+func GopCacheSendFlv(pub, s *Stream, gop *GopCache) error {
 	var h FlvHeader
 	h.Signature0 = 0x46
 	h.Signature1 = 0x4c
@@ -632,7 +632,7 @@ func GopCacheSendFlv(pub, s *RtmpStream, gop *GopCache) error {
 	return nil
 }
 
-func FlvSendHead(s *RtmpStream, h FlvHeader) error {
+func FlvSendHead(s *Stream, h FlvHeader) error {
 	buf := make([]byte, 13)
 	buf[0] = h.Signature0
 	buf[1] = h.Signature1
@@ -651,7 +651,7 @@ func FlvSendHead(s *RtmpStream, h FlvHeader) error {
 	return nil
 }
 
-func FlvSendMetaData(pub, s *RtmpStream, c Chunk) error {
+func FlvSendMetaData(pub, s *Stream, c Chunk) error {
 	s.log.Println("<== send MeteData")
 	var err error
 
@@ -663,7 +663,7 @@ func FlvSendMetaData(pub, s *RtmpStream, c Chunk) error {
 	return nil
 }
 
-func FlvSendMetaDataAes(pub, s *RtmpStream, timestamp uint32) error {
+func FlvSendMetaDataAes(pub, s *Stream, timestamp uint32) error {
 	// 推流鉴权要求的播放加密 要通过flv的metadata发送解密参数
 	if pub.PubAuth.Data.AesKey == "" {
 		return nil
@@ -695,7 +695,7 @@ func FlvSendMetaDataAes(pub, s *RtmpStream, timestamp uint32) error {
 	return nil
 }
 
-func FlvSendVideoHead(pub, s *RtmpStream, c Chunk) error {
+func FlvSendVideoHead(pub, s *Stream, c Chunk) error {
 	s.log.Println("<== send VideoHead")
 	var err error
 
@@ -707,7 +707,7 @@ func FlvSendVideoHead(pub, s *RtmpStream, c Chunk) error {
 	return nil
 }
 
-func FlvSendAudioHead(pub, s *RtmpStream, c Chunk) error {
+func FlvSendAudioHead(pub, s *Stream, c Chunk) error {
 	s.log.Println("<== send AudioHead")
 	var err error
 
@@ -719,7 +719,7 @@ func FlvSendAudioHead(pub, s *RtmpStream, c Chunk) error {
 	return nil
 }
 
-func FlvSendFastlowData(pub, s *RtmpStream, md *list.List, timestamp uint32) error {
+func FlvSendFastlowData(pub, s *Stream, md *list.List, timestamp uint32) error {
 	s.log.Printf("<== GopCache MediaData Len=%d", md.Len())
 	var err error
 	if md == nil {
@@ -747,7 +747,7 @@ func FlvSendFastlowData(pub, s *RtmpStream, md *list.List, timestamp uint32) err
 	return nil
 }
 
-func FlvSendData(pub, s *RtmpStream, md *list.List) error {
+func FlvSendData(pub, s *Stream, md *list.List) error {
 	s.log.Printf("<== GopCache MediaData Len=%d", md.Len())
 	var err error
 	if md == nil {
@@ -794,7 +794,7 @@ func AesEncrypt(orgData, key, iv []byte) []byte {
 }
 
 // s是发布者, p是播放者
-func MessageSendFlv(s, p *RtmpStream, c Chunk) error {
+func MessageSendFlv(s, p *Stream, c Chunk) error {
 	var t FlvTag
 	t.TagType = uint8(c.MsgTypeId)
 	t.DataSize = c.MsgLength

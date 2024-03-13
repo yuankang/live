@@ -15,7 +15,7 @@ import (
 /*************************************************/
 /* RtmpPlayer 别人拉我们的流
 /*************************************************/
-func RtmpTransmit(p *RtmpStream, s *RtmpStream) {
+func RtmpTransmit(p *Stream, s *Stream) {
 	defer p.Wg.Done()
 	var c *Chunk
 	var ok bool
@@ -53,7 +53,7 @@ func RtmpTransmit(p *RtmpStream, s *RtmpStream) {
 
 //拉流者网络有好有坏, 某个拉流者阻塞不能影响别的
 //每个拉流者一个发送协程, 哪个发送者有积压数据就扔掉
-func RtmpPlayer(s *RtmpStream) {
+func RtmpPlayer(s *Stream) {
 	//key := fmt.Sprintf("%s_%s", s.AmfInfo.App, s.AmfInfo.StreamId)
 	key := s.AmfInfo.StreamId
 	s.log.Println("publisher key is", key)
@@ -74,7 +74,7 @@ func RtmpPlayer(s *RtmpStream) {
 		RtmpStop(s)
 		return
 	}
-	p, _ := v.(*RtmpStream)
+	p, _ := v.(*Stream)
 	p.Wg.Add(1)
 	//先启动播放转发协程, 再添加到发布者的players里
 	s.PlayChan = make(chan *Chunk, conf.PlayStockMax)
@@ -90,8 +90,8 @@ func RtmpPlayer(s *RtmpStream) {
 /*************************************************/
 /* RtmpPublisher 别人推流给我们
 /*************************************************/
-func HeadDataSend(s, p *RtmpStream) {
-	switch p.StreamType {
+func HeadDataSend(s, p *Stream) {
+	switch p.Type {
 	case "rtmpPlayer":
 		MetaSendRtmp(s, p)
 	case "flvPlayer":
@@ -100,7 +100,7 @@ func HeadDataSend(s, p *RtmpStream) {
 }
 
 //s是发布者, p是播放者
-func MessageSendRtmp(s, p *RtmpStream, c Chunk) error {
+func MessageSendRtmp(s, p *Stream, c Chunk) error {
 	//发送数据给播放者
 	p.PlayChan <- &c
 
@@ -139,7 +139,7 @@ func MessageSendRtmp(s, p *RtmpStream, c Chunk) error {
 }
 
 //s: server, p: player
-func LiveDataSend(s, p *RtmpStream, c Chunk) {
+func LiveDataSend(s, p *Stream, c Chunk) {
 	n := len(p.PlayChan)
 	//播放积压已经到最大值, 这时音视频数据都不发送
 	//flv播放器不正常关闭, 导致PlayChanNum=600日志打印太多，增加ticker解决此问题
@@ -160,7 +160,7 @@ func LiveDataSend(s, p *RtmpStream, c Chunk) {
 			} else {
 				v1 := v.(*Chunk)
 				v1.Timestamp = c.Timestamp
-				switch p.StreamType {
+				switch p.Type {
 				case "rtmpPlayer":
 					p.PlayChan <- v1
 				case "flvPlayer":
@@ -181,7 +181,7 @@ func LiveDataSend(s, p *RtmpStream, c Chunk) {
 				} else {
 					v1 := v.(*Chunk)
 					v1.Timestamp = c.Timestamp
-					switch p.StreamType {
+					switch p.Type {
 					case "rtmpPlayer":
 						p.PlayChan <- v1
 					case "flvPlayer":
@@ -199,7 +199,7 @@ func LiveDataSend(s, p *RtmpStream, c Chunk) {
 		}
 	}
 
-	switch p.StreamType {
+	switch p.Type {
 	case "rtmpPlayer":
 		MessageSendRtmp(s, p, c)
 	case "flvPlayer":
@@ -210,10 +210,10 @@ func LiveDataSend(s, p *RtmpStream, c Chunk) {
 //启播方式: 默认采用快速启播
 //1 快速启播: 先发送缓存的gop数据, 再发送最新数据. 启播快 但延时交高
 //2 低延时启播: 直接发送最新数据. 启播交慢 但是延时最低
-func RtmpSender(s *RtmpStream) {
+func RtmpSender(s *Stream) {
 	var ok bool
 	var n int
-	var p *RtmpStream
+	var p *Stream
 	var err error
 	td := time.Duration(s.PlaybackTimeout)
 	ticker := time.NewTicker(td * time.Second)
@@ -297,7 +297,7 @@ func RtmpSender(s *RtmpStream) {
 		//播放者到播放器的网络差 也不会引起这个循环阻塞
 		//详细说明见 RtmpTransmit()
 		s.Players.Range(func(k, v interface{}) bool {
-			p, _ = v.(*RtmpStream)
+			p, _ = v.(*Stream)
 			//s.log.Printf("<== send data to %s, %d", p.Key, i)
 			if i%1000 == 0 {
 				s.log.Printf("<== send data to %s, dataType=%s", p.Key, c.DataType)
@@ -333,7 +333,7 @@ func RtmpSender(s *RtmpStream) {
 }
 
 //接收(合并)数据 并 传递数据给发送者
-func RtmpReceiver(s *RtmpStream) error {
+func RtmpReceiver(s *Stream) error {
 	c, err := MessageMerge(s, nil)
 	if err != nil {
 		s.log.Println(err)
@@ -411,7 +411,7 @@ type RtmpPublisher struct {
 	HevcC        HEVCDecoderConfigurationRecord // h265 header
 }
 
-func RtmpPublisher0(s *RtmpStream) {
+func RtmpPublisher0(s *Stream) {
 	//s.Key = fmt.Sprintf("%s_%s", s.AmfInfo.App, s.AmfInfo.StreamId)
 	s.Key = s.AmfInfo.StreamId
 	s.log.Println("publisher key is", s.Key)
@@ -478,7 +478,7 @@ func RtmpPublisher0(s *RtmpStream) {
 /*************************************************/
 /* RtmpServer
 /*************************************************/
-func RtmpStop(s *RtmpStream) {
+func RtmpStop(s *Stream) {
 	if s.Conn0 != nil {
 		s.Conn0.Close()
 		s.Conn0 = nil
@@ -507,7 +507,7 @@ func RtmpStop(s *RtmpStream) {
 	}
 }
 
-func RtmpPublishStop(s *RtmpStream) {
+func RtmpPublishStop(s *Stream) {
 	s.Cancel()
 	s.log.Printf("unpublish after cancel")
 	s.Wg.Wait()
@@ -545,11 +545,11 @@ func RtmpPublishStop(s *RtmpStream) {
 			s.HlsLiveChan = nil
 		}
 	*/
-	var p *RtmpStream
+	var p *Stream
 	s.Players.Range(func(k, v interface{}) bool {
-		p, _ = v.(*RtmpStream)
+		p, _ = v.(*Stream)
 
-		switch p.StreamType {
+		switch p.Type {
 		case "rtmpPlayer":
 			RtmpStop(p)
 		case "flvPlayer":
@@ -623,7 +623,7 @@ func RtmpPublishStop(s *RtmpStream) {
 	log.Printf("publish %s delete, puber num %d", key, utils.SyncMapLen(&RtmpPuberMap))
 }
 
-func RtmpPublishStop1(s *RtmpStream) {
+func RtmpPublishStop1(s *Stream) {
 	if s.Conn0 != nil {
 		s.Conn0.Close()
 		s.Conn0 = nil
@@ -675,7 +675,7 @@ func GetPlaybackTimeout(url string) int {
 
 func RtmpHandler(c net.Conn) {
 	//这里还无法区分是 rtmp发布 还是 rtmp播放
-	s, err := NewRtmpStream(c)
+	s, err := NewStream(c)
 	if err != nil {
 		log.Println("rtmp error ", err)
 		RtmpStop(s)
@@ -739,10 +739,10 @@ func RtmpHandler(c net.Conn) {
 			go PublishAuth(s)
 		}
 
-		s.StreamType = "rtmpPublisher"
+		s.Type = "rtmpPublisher"
 		RtmpPublisher0(s) // 进入for循环 接收数据并拷贝给发送协程
 	} else {
-		s.StreamType = "rtmpPlayer"
+		s.Type = "rtmpPlayer"
 		RtmpPlayer(s) // 只需把播放信息 存入到Publisher的Players里
 	}
 }

@@ -12,7 +12,7 @@ import (
 /* rtmp client
 /*************************************************/
 //建连+握手
-func RtmpClient(ip, port string, to int) (*RtmpStream, error) {
+func RtmpClient(ip, port string, to int) (*Stream, error) {
 	addr := fmt.Sprintf("%s:%s", ip, port)
 	//log.Printf("rtmp conn raddr=%s", addr)
 
@@ -24,7 +24,7 @@ func RtmpClient(ip, port string, to int) (*RtmpStream, error) {
 	}
 	//log.Printf("rtmp conn laddr=%s, raddr=%s", c.LocalAddr().String(), c.RemoteAddr().String())
 
-	rs, err := NewRtmpStream(c)
+	rs, err := NewStream(c)
 	if err != nil {
 		rs.log.Println(err)
 		return nil, err
@@ -47,7 +47,7 @@ func RtmpClient(ip, port string, to int) (*RtmpStream, error) {
 /*************************************************/
 /* RtmpPusher 我们推流给别人 是rtmp客户端 是发布者
 /*************************************************/
-func RtmpPublishMsgInteract(rs *RtmpStream) error {
+func RtmpPublishMsgInteract(rs *Stream) error {
 	err := SendConnMsg(rs)
 	if err != nil {
 		rs.log.Println(err)
@@ -90,13 +90,13 @@ func RtmpPublishMsgInteract(rs *RtmpStream) error {
 	return nil
 }
 
-func RtmpPusher(ip, port, app, sid string) (*RtmpStream, error) {
+func RtmpPusher(ip, port, app, sid string) (*Stream, error) {
 	rs, err := RtmpClient(ip, port, 10)
 	if err != nil {
 		log.Println(err)
 		return nil, err
 	}
-	rs.StreamType = "RtmpPusher"
+	rs.Type = "RtmpPusher"
 	rs.App = app
 	rs.StreamId = sid
 
@@ -116,7 +116,7 @@ func RtmpPusher(ip, port, app, sid string) (*RtmpStream, error) {
 /*************************************************/
 /* RtmpPuller 我们拉别人的流 是rtmp客户端 是接收者
 /*************************************************/
-func RtmpPlayMsgInteract(rs *RtmpStream) error {
+func RtmpPlayMsgInteract(rs *Stream) error {
 	err := SendConnMsg(rs)
 	if err != nil {
 		rs.log.Println(err)
@@ -167,14 +167,14 @@ func RtmpPlayMsgInteract(rs *RtmpStream) error {
 	return nil
 }
 
-func RtmpPuller(ip, port, app, sid string, to int, cc chan bool) (*RtmpStream, error) {
-	var rs *RtmpStream
+func RtmpPuller(ip, port, app, sid string, to int, cc chan bool) (*Stream, error) {
+	var rs *Stream
 	var err error
 
 	key := fmt.Sprintf("%s_%s", app, sid)
 	v, ok := RtmpPuberMap.Load(key)
 	if ok == true {
-		rs = v.(*RtmpStream)
+		rs = v.(*Stream)
 		rs.log.Printf("rtmp %s is exist", key)
 		cc <- true
 		return rs, nil
@@ -186,7 +186,7 @@ func RtmpPuller(ip, port, app, sid string, to int, cc chan bool) (*RtmpStream, e
 		cc <- false
 		return nil, err
 	}
-	rs.StreamType = "RtmpPuller"
+	rs.Type = "RtmpPuller"
 	rs.Key = key
 	rs.App = app
 	rs.StreamId = sid

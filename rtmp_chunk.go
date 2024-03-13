@@ -84,7 +84,7 @@ type Chunk struct {
 	NaluNum     uint32 //当前消息中, 有几个nalu, 写ts文件时, 每个nalu前都要加开始码
 }
 
-func ChunkHeaderAssemble(s *RtmpStream, c *Chunk) error {
+func ChunkHeaderAssemble(s *Stream, c *Chunk) error {
 	var err error
 	bh := c.Fmt << 6
 	switch {
@@ -173,7 +173,7 @@ END:
 // c.Fmt=2 肯定是新Message, 要复用buf, 初始化buf索引, MsgLength, MsgTypeId, MsgStreamId同上个
 // c.Fmt=3 可能是新Message, 要复用buf, 初始化buf索引, TimeDelta, MsgLength, MsgTypeId, MsgStreamId同上个
 // c.Fmt=3 可能是某Message后续数据,无需初始化buf索引, TimeDelta, MsgLength, MsgTypeId, MsgStreamId同上个
-func ChunkAssemble(s *RtmpStream, c *Chunk) error {
+func ChunkAssemble(s *Stream, c *Chunk) error {
 	var err error
 	switch c.Fmt {
 	case 0:
