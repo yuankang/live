@@ -221,41 +221,46 @@ func RtpHandler(s *Stream) {
 		//SeqNum=3, HeadSeq=0, TailSeq=5
 		//SeqNum=5, HeadSeq=0, TailSeq=5
 		//SeqNum=6, HeadSeq=0, TailSeq=6
+		//......
+		//SeqNum=65534, HeadSeq=0, TailSeq=65534
+		//SeqNum=65535, HeadSeq=0, TailSeq=65535
+		//SeqNum=0, HeadSeq=0, TailSeq=0
 		if rp.SeqNum >= s.RtpPktListTailSeq {
 			s.RtpPktList.PushBack(rp)
 			s.RtpPktListTailSeq = rp.SeqNum + 1
-		} else if rp.SeqNum < s.RtpPktListHeadSeq {
-			//TODO: 到65536后 回滚成0
-			continue //直接扔掉
 		} else {
-			//cache这个RtpPacket, 然后记录等待次数
-			s.RtpPkgCache.Store(rp.SeqNum, rp)
+			if rp.SeqNum < s.RtpPktListHeadSeq {
+				continue //直接扔掉
+			} else {
+				//cache这个RtpPacket, 然后记录等待次数
+				s.RtpPkgCache.Store(rp.SeqNum, rp)
 
-			if s.RtpSeqWait < 5 {
-				s.RtpSeqWait += 1
-				s.log.Printf("RtpSeqThis=%d, RtpSeqNeed=%d, RtpSeqWait=%d", rp.SeqNum, s.RtpSeqNeed, s.RtpSeqWait)
-				continue
-			}
-			s.RtpSeqWait = 0
-
-			//已经等了5个包, 还是没有来 需要的rtp包
-			//此时不在等了, 并且需要处理s.RtpPkgCache中的所有rtp包
-			s.log.Printf("RtpSeqNeed=%d lost", s.RtpSeqNeed)
-			s.RtpSeqNeed += 1
-
-			RtpPkgCacheLen := utils.SyncMapLen(&s.RtpPkgCache)
-			for i := 0; i < RtpPkgCacheLen; i++ {
-				v, ok := s.RtpPkgCache.Load(s.RtpSeqNeed)
-				if ok == false { //rtp包序号不连续, 停止查找
-					s.log.Printf("RtpPkgCache haven't RtpSeq=%d", s.RtpSeqNeed)
-					break
+				if s.RtpSeqWait < 5 {
+					s.RtpSeqWait += 1
+					s.log.Printf("RtpSeqThis=%d, RtpSeqNeed=%d, RtpSeqWait=%d", rp.SeqNum, s.RtpSeqNeed, s.RtpSeqWait)
+					continue
 				}
-				s.log.Printf("RtpPkgCache have RtpSeq=%d", s.RtpSeqNeed)
+				s.RtpSeqWait = 0
 
-				rp, _ = v.(RtpPacket)
-				rps = append(rps, rp)
-				s.RtpPkgCache.Delete(s.RtpSeqNeed)
-				s.RtpSeqNeed++
+				//已经等了5个包, 还是没有来 需要的rtp包
+				//此时不在等了, 并且需要处理s.RtpPkgCache中的所有rtp包
+				s.log.Printf("RtpSeqNeed=%d lost", s.RtpSeqNeed)
+				s.RtpSeqNeed += 1
+
+				RtpPkgCacheLen := utils.SyncMapLen(&s.RtpPkgCache)
+				for i := 0; i < RtpPkgCacheLen; i++ {
+					v, ok := s.RtpPkgCache.Load(s.RtpSeqNeed)
+					if ok == false { //rtp包序号不连续, 停止查找
+						s.log.Printf("RtpPkgCache haven't RtpSeq=%d", s.RtpSeqNeed)
+						break
+					}
+					s.log.Printf("RtpPkgCache have RtpSeq=%d", s.RtpSeqNeed)
+
+					rp, _ = v.(RtpPacket)
+					rps = append(rps, rp)
+					s.RtpPkgCache.Delete(s.RtpSeqNeed)
+					s.RtpSeqNeed++
+				}
 			}
 		}
 
@@ -286,6 +291,11 @@ func RtpHandler(s *Stream) {
 	}
 }
 
+/*
+1 接收并缓存rtp包, 如何缓存chan/map/list
+2 rtp包组成视频帧, 每个rtp包触发一次检查, 每次尽可能多组成视频帧
+3 视频帧以rtmp方式发送, 每次尽可能多发送
+*/
 func RtpReceiverTcp(c net.Conn) {
 	var l uint16
 	var d []byte
@@ -312,6 +322,12 @@ func RtpReceiverTcp(c net.Conn) {
 			log.Println(err)
 			break
 		}
+
+		n := l - 10
+		if n < 0 {
+			n = 0
+		}
+		log.Println("RtpPkg tcp, Len=%d, Data=%x", l, d[n:])
 
 		rp = RtpParse(d)
 		//首个rtp包, 进不去; 首个rtp会进入SsrcFindStream();
