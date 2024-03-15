@@ -147,7 +147,7 @@ func RtpReceiverUdp(c *net.UDPConn) {
 	rh.CsrcCount = buf[0] & 0xf
 	rh.Marker = (buf[1] >> 7) & 0x1
 	rh.PayloadType = buf[1] & 0x7f
-	rh.SeqNumber = ByteToUint16(buf[2:4], BE)
+	rh.SeqNum = ByteToUint16(buf[2:4], BE)
 	rh.Timestamp = ByteToUint32(buf[4:8], BE)
 	rh.Ssrc = ByteToUint32(buf[8:12], BE)
 	//rh.SsrcStr = strconv.Itoa(int(rh.Ssrc))
@@ -170,7 +170,7 @@ func RtpReceiverUdp(c *net.UDPConn) {
 	}
 
 	log.Printf("%#v", rh)
-	log.Printf("PT:%d(%s), SeqNum:%d, TS:%d, ssrc:%d, csrcNum:%d", rh.PayloadType, rh.PtStr, rh.SeqNumber, rh.Timestamp, rh.Ssrc, rh.CsrcCount)
+	log.Printf("PT:%d(%s), SeqNum:%d, TS:%d, ssrc:%d, csrcNum:%d", rh.PayloadType, rh.PtStr, rh.SeqNum, rh.Timestamp, rh.Ssrc, rh.CsrcCount)
 	//PT:96(PS), SeqNum:781, TS:3778690924, ssrc:3297314134, csrcNum:0
 	//PT:97(AAC), SeqNum:33, TS:1723650452, ssrc:3180170775, csrcNum:0
 
@@ -211,22 +211,29 @@ func RtpHandler(s *Stream) {
 			s.log.Println(err)
 			break
 		}
+		s.log.Printf("==> SeqNum=%d, RtpPktListHeadSeq=%d, RtpPktListTailSeq", rp.SeqNum, s.RtpPktListHeadSeq, s.RtpPktListTailSeq)
 
-		s.log.Printf("==> RtpSeqThis=%d, RtpSeqNeed=%d", rp.SeqNumber, s.RtpSeqNeed)
-		//FIXME 也可以使用list插入时排序
-		if rp.SeqNumber == s.RtpSeqNeed {
-			rps = append(rps, rp)
-			s.RtpSeqNeed += 1
-		} else if rp.SeqNumber < s.RtpSeqNeed {
+		//0, 1, ..., 65534, 65535, 0, 1, ..., 65535, 0, ...
+		//SeqNum=0, HeadSeq=0, TailSeq=0
+		//SeqNum=1, HeadSeq=0, TailSeq=1
+		//SeqNum=4, HeadSeq=0, TailSeq=2
+		//SeqNum=2, HeadSeq=0, TailSeq=5
+		//SeqNum=3, HeadSeq=0, TailSeq=5
+		//SeqNum=5, HeadSeq=0, TailSeq=5
+		//SeqNum=6, HeadSeq=0, TailSeq=6
+		if rp.SeqNum >= s.RtpPktListTailSeq {
+			s.RtpPktList.PushBack(rp)
+			s.RtpPktListTailSeq = rp.SeqNum + 1
+		} else if rp.SeqNum < s.RtpPktListHeadSeq {
 			//TODO: 到65536后 回滚成0
 			continue //直接扔掉
 		} else {
 			//cache这个RtpPacket, 然后记录等待次数
-			s.RtpPkgCache.Store(rp.SeqNumber, rp)
+			s.RtpPkgCache.Store(rp.SeqNum, rp)
 
 			if s.RtpSeqWait < 5 {
 				s.RtpSeqWait += 1
-				s.log.Printf("RtpSeqThis=%d, RtpSeqNeed=%d, RtpSeqWait=%d", rp.SeqNumber, s.RtpSeqNeed, s.RtpSeqWait)
+				s.log.Printf("RtpSeqThis=%d, RtpSeqNeed=%d, RtpSeqWait=%d", rp.SeqNum, s.RtpSeqNeed, s.RtpSeqWait)
 				continue
 			}
 			s.RtpSeqWait = 0
@@ -255,7 +262,7 @@ func RtpHandler(s *Stream) {
 		rpsLen := len(rps)
 		for i := 0; i < rpsLen; i++ {
 			rp = rps[i]
-			s.log.Printf("%d, Len=%d, UseNum=%d, SeqNum=%d, ssrc=%.10d, PT=%d(%s), ts=%d", i, rp.Len, rp.UseNum, rp.SeqNumber, rp.Ssrc, rp.PayloadType, rp.PtStr, rp.Timestamp)
+			s.log.Printf("%d, Len=%d, UseNum=%d, SeqNum=%d, ssrc=%.10d, PT=%d(%s), ts=%d", i, rp.Len, rp.UseNum, rp.SeqNum, rp.Ssrc, rp.PayloadType, rp.PtStr, rp.Timestamp)
 
 			switch rp.PayloadType {
 			case 0x08: //08 G.711a
@@ -324,16 +331,21 @@ func RtpReceiverTcp(c net.Conn) {
 			s.Conn0 = c
 			s.RemoteAddr = c.RemoteAddr().String()
 			s.RtpChan = make(chan RtpPacket, 100)
-			s.RtpRecChan = make(chan RtpPacket, 100)
+			//s.RtpRecChan = make(chan RtpPacket, 100)
 			//s.FrameChan = make(chan Frame, 100)
-			s.RtpSeqNeed = rp.SeqNumber
+			s.RtpSeqNeed = rp.SeqNum
+
+			//s.RtpPktList
+			s.RtpPktListHeadSeq = rp.SeqNum
+			s.RtpPktListTailSeq = rp.SeqNum
+			//s.RtpPktListMutex   sync.Mutex //rtplist锁, 防止插入和删除并发
 
 			//go Gb281812Mem2RtmpServer(s)
-			go Gb28181Net2RtmpServer(s)
+			//go Gb28181Net2RtmpServer(s)
 			go RtpHandler(s)
-			go RtpRec(s)
+			//go RtpRec(s)
 		}
-		s.log.Printf("oIp=%s, rtpLen=%d(%x), seqNum=%d, %#v", s.RemoteAddr, rp.Len, rp.Len, rp.SeqNumber, rp.RtpHeader)
+		s.log.Printf("oIp=%s, rtpLen=%d(%x), seqNum=%d, %#v", s.RemoteAddr, rp.Len, rp.Len, rp.SeqNum, rp.RtpHeader)
 
 		if len(s.RtpChan) < 100 {
 			s.RtpChan <- *rp

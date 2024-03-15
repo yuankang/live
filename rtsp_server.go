@@ -36,8 +36,8 @@ func RtspNet2RtspPlayers(rs *RtspStream, rp *RtpPacket) {
 			/*
 				//发送 缓存SpsPpsRtpPkg + 缓存AvRtpPkg(含当前rtp包)
 				p, _ = GetRtpSpsPpsPkg(rs)
-				//依据RtpAvPktCache中第1个rtp包的信息, 修改RtpSpsPpsPkg的SeqNumber和Timestamp
-				//RtpSpsPpsPkg的SeqNumber=RtpAvPktCache1.SeqNumber-1, 注意回绕
+				//依据RtpAvPktCache中第1个rtp包的信息, 修改RtpSpsPpsPkg的SeqNum和Timestamp
+				//RtpSpsPpsPkg的SeqNum=RtpAvPktCache1.SeqNum-1, 注意回绕
 				//RtpSpsPpsPkg的Timestamp=RtpAvPktCache1.Timestamp
 				UpdateRtpSpsPpsPkg(rs, p)
 				player.Conn.Write(p.Data)
@@ -47,7 +47,7 @@ func RtspNet2RtspPlayers(rs *RtspStream, rp *RtpPacket) {
 				p = (e.Value).(*RtpPacket)
 				d, _ = AddInterleavedMode(p)
 				n, err = player.Conn.Write(d)
-				player.log.Printf("Send RtpSeq=%d(%s) DL=%d SL=%d to Player %s", p.SeqNumber, p.PtStr, len(p.Data), n, player.Key)
+				player.log.Printf("Send RtpSeq=%d(%s) DL=%d SL=%d to Player %s", p.SeqNum, p.PtStr, len(p.Data), n, player.Key)
 				if err != nil {
 					player.log.Printf("delete %s player", player.Key)
 					rs.log.Printf("delete %s player", player.Key)
@@ -58,7 +58,7 @@ func RtspNet2RtspPlayers(rs *RtspStream, rp *RtpPacket) {
 		} else {
 			d, _ = AddInterleavedMode(rp)
 			n, err = player.Conn.Write(d)
-			player.log.Printf("Send V=%d, P=%d, X=%d, CC=%d, M=%d, PT=%d(%s), Seq=%d, TS=%d, SSRC=%d, Len=%d", rp.Version, rp.Padding, rp.Extension, rp.CsrcCount, rp.Marker, rp.PayloadType, rp.PtStr, rp.SeqNumber, rp.Timestamp, rp.Ssrc, rp.Len)
+			player.log.Printf("Send V=%d, P=%d, X=%d, CC=%d, M=%d, PT=%d(%s), Seq=%d, TS=%d, SSRC=%d, Len=%d", rp.Version, rp.Padding, rp.Extension, rp.CsrcCount, rp.Marker, rp.PayloadType, rp.PtStr, rp.SeqNum, rp.Timestamp, rp.Ssrc, rp.Len)
 			if err != nil {
 				player.log.Printf("delete %s player", player.Key)
 				rs.log.Printf("delete %s player", player.Key)

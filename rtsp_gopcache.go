@@ -43,9 +43,9 @@ func RtpSpsPpsPkgUpdate(rs *RtspStream, rp *RtpPacket) {
 	p := (e.Value).(*RtpPacket)
 
 	//65533 65534 65535 0 1 2
-	rp.SeqNumber = p.SeqNumber - 1
-	if p.SeqNumber == 0 {
-		rp.SeqNumber = 65535
+	rp.SeqNum = p.SeqNum - 1
+	if p.SeqNum == 0 {
+		rp.SeqNum = 65535
 	}
 	rp.Timestamp = p.Timestamp
 

@@ -28,8 +28,8 @@ func DeleteMapValue(rs *RtspStream, rps []*RtpPacket, isVideo bool) {
 
 	l := len(rps)
 	for i := 0; i < l; i++ {
-		rpq.PkgMap.Delete(rps[i].SeqNumber)
-		//rs.log.Printf("%s delete seqnum %d", rpt, rps[i].SeqNumber)
+		rpq.PkgMap.Delete(rps[i].SeqNum)
+		//rs.log.Printf("%s delete seqnum %d", rpt, rps[i].SeqNum)
 	}
 }
 
@@ -42,7 +42,7 @@ func RtspRtps2VideoPacket(rs *RtspStream, rps []*RtpPacket) (*AvPacket, error) {
 	l := len(rps)
 	for i := 0; i < l; i++ {
 		rp = rps[i]
-		//rs.log.Printf("P=%d, X=%d, CC=%d, M=%d, PT=%d(%s), Seq=%d, TS=%d, SSRC=%d, len=%d", rp.Padding, rp.Extension, rp.CsrcCount, rp.Marker, rp.PayloadType, rp.PtStr, rp.SeqNumber, rp.Timestamp, rp.Ssrc, rp.Len)
+		//rs.log.Printf("P=%d, X=%d, CC=%d, M=%d, PT=%d(%s), Seq=%d, TS=%d, SSRC=%d, len=%d", rp.Padding, rp.Extension, rp.CsrcCount, rp.Marker, rp.PayloadType, rp.PtStr, rp.SeqNum, rp.Timestamp, rp.Ssrc, rp.Len)
 
 		//1000毫秒分成90000份, 每份时长1/90毫秒
 		//fps=20, 两帧时间差=1000/20=50毫秒, 两帧份数差=50/(1/90)=4500份
@@ -83,7 +83,7 @@ func RtspRtps2AudioPacket(rs *RtspStream, rps []*RtpPacket) ([]*AvPacket, error)
 	l := len(rps)
 	for i := 0; i < l; i++ {
 		rp = rps[i]
-		rs.log.Printf("P=%d, X=%d, CC=%d, M=%d, PT=%d(%s), Seq=%d, TS=%d, SSRC=%d, len=%d", rp.Padding, rp.Extension, rp.CsrcCount, rp.Marker, rp.PayloadType, rp.PtStr, rp.SeqNumber, rp.Timestamp, rp.Ssrc, rp.Len)
+		rs.log.Printf("P=%d, X=%d, CC=%d, M=%d, PT=%d(%s), Seq=%d, TS=%d, SSRC=%d, len=%d", rp.Padding, rp.Extension, rp.CsrcCount, rp.Marker, rp.PayloadType, rp.PtStr, rp.SeqNum, rp.Timestamp, rp.Ssrc, rp.Len)
 
 		//1000毫秒分 8000份, 每份时长1000/ 8000=0.1250毫秒(1/ 8=0.1250)
 		//1000毫秒分11025份, 每份时长1000/11025=0.0907毫秒(1/11=0.0909)
@@ -216,33 +216,33 @@ func RtspRtpSort(rs *RtspStream, rp *RtpPacket, isVideo bool) error {
 		rpq = rs.AudioRtpPkgs
 		rpt = "AudioRtpPkgMap"
 	}
-	rs.log.Printf("==> %s, RtpNeedSeq=%d, RtpSeq=%d ts=%d", rpt, rpq.NeedSeq, rp.SeqNumber, rp.Timestamp)
+	rs.log.Printf("==> %s, RtpNeedSeq=%d, RtpSeq=%d ts=%d", rpt, rpq.NeedSeq, rp.SeqNum, rp.Timestamp)
 
 	var err error
-	if rp.SeqNumber < rpq.NeedSeq {
+	if rp.SeqNum < rpq.NeedSeq {
 		//需要10, 来的9, 9直接扔掉, 因为已经等了5次
-		err = fmt.Errorf("%s, RtpNeedSeq=%d, RtpSeq=%d drop it", rpt, rpq.NeedSeq, rp.SeqNumber)
+		err = fmt.Errorf("%s, RtpNeedSeq=%d, RtpSeq=%d drop it", rpt, rpq.NeedSeq, rp.SeqNum)
 		return err
-	} else if rp.SeqNumber == rpq.NeedSeq {
+	} else if rp.SeqNum == rpq.NeedSeq {
 		//需要10, 来的10, 10放入map缓存中
-		rpq.PkgMap.Store(rp.SeqNumber, rp)
+		rpq.PkgMap.Store(rp.SeqNum, rp)
 		rpq.NeedSeq += 1
 	} else {
 		//需要10, 来的12, 12放入map缓存中
-		rpq.PkgMap.Store(rp.SeqNumber, rp)
+		rpq.PkgMap.Store(rp.SeqNum, rp)
 
 		//判断10等了几次, 超过5次就放弃
 		if rpq.NeedSeqWaitNum < 5 {
 			rpq.NeedSeqWaitNum += 1
-			err = fmt.Errorf("%s, RtpNeedSeq=%d, RtpSeq=%d, NeedSeqWaitNum=%d", rpt, rpq.NeedSeq, rp.SeqNumber, rpq.NeedSeqWaitNum)
+			err = fmt.Errorf("%s, RtpNeedSeq=%d, RtpSeq=%d, NeedSeqWaitNum=%d", rpt, rpq.NeedSeq, rp.SeqNum, rpq.NeedSeqWaitNum)
 			return err
 		}
-		rs.log.Printf("%s, RtpNeedSeq=%d lost, RtpSeq=%d", rpt, rpq.NeedSeq, rp.SeqNumber)
+		rs.log.Printf("%s, RtpNeedSeq=%d lost, RtpSeq=%d", rpt, rpq.NeedSeq, rp.SeqNum)
 		rpq.NeedSeqWaitNum = 0
 
 		//RtpUdp的seq可能出现连续异常增长, 比如: 3710后是3810
 		//所以这里要 查找map缓存中 3710之后首先出现的seq
-		l := int(rp.SeqNumber - rpq.NeedSeq)
+		l := int(rp.SeqNum - rpq.NeedSeq)
 		for i := 0; i < l; i++ {
 			_, ok := rpq.PkgMap.Load(rpq.NeedSeq)
 			if ok == true {
@@ -256,8 +256,8 @@ func RtspRtpSort(rs *RtspStream, rp *RtpPacket, isVideo bool) error {
 
 			//放入map缓存中一个空rtp数据包, 便于后续处理
 			//p := &RtpPacket{}
-			//p.SeqNumber = rpq.NeedSeq
-			//rpq.PkgMap.Store(p.SeqNumber, p)
+			//p.SeqNum = rpq.NeedSeq
+			//rpq.PkgMap.Store(p.SeqNum, p)
 			rpq.NeedSeq += 1
 		}
 	}
@@ -286,15 +286,15 @@ func RtspRtpCache(rs *RtspStream, rp *RtpPacket, isVideo bool) error {
 
 	if rpq.Ssrc == 0 {
 		rpq.Ssrc = rp.Ssrc
-		rpq.NeedSeq = rp.SeqNumber
-		rpq.PkgMapMinSeq = rp.SeqNumber
+		rpq.NeedSeq = rp.SeqNum
+		rpq.PkgMapMinSeq = rp.SeqNum
 		rpq.NeedTs = rp.Timestamp
 		rs.log.Printf("%s ssrc is %d", rpt, rpq.Ssrc)
 	}
 	//RtpSeq回绕: 65533 65534 65535 0 1 2
 	//需要10, 先来13, 后来10
-	if rpq.PkgMapMaxSeq == 65535 || rpq.PkgMapMaxSeq < rp.SeqNumber {
-		rpq.PkgMapMaxSeq = rp.SeqNumber
+	if rpq.PkgMapMaxSeq == 65535 || rpq.PkgMapMaxSeq < rp.SeqNum {
+		rpq.PkgMapMaxSeq = rp.SeqNum
 	}
 
 	var err error
@@ -326,7 +326,7 @@ func RtspRtpCacheSort(rs *RtspStream) {
 			rs.log.Printf("%s RtspRtpCacheSort() stop", rs.StreamId)
 			return
 		}
-		//rs.log.Printf("P=%d, X=%d, CC=%d, M=%d, PT=%d(%s), Seq=%d, TS=%d, SSRC=%d", p.Padding, p.Extension, p.CsrcCount, p.Marker, p.PayloadType, p.PtStr, p.SeqNumber, p.Timestamp, p.Ssrc)
+		//rs.log.Printf("P=%d, X=%d, CC=%d, M=%d, PT=%d(%s), Seq=%d, TS=%d, SSRC=%d", p.Padding, p.Extension, p.CsrcCount, p.Marker, p.PayloadType, p.PtStr, p.SeqNum, p.Timestamp, p.Ssrc)
 
 		switch int(p.PayloadType) {
 		case rs.Sdp.VideoPayloadTypeInt:
@@ -353,7 +353,7 @@ func RtspRtpHandler(rs *RtspStream, d []byte, RtmpSend bool) error {
 
 	p := RtpParse(d)
 	p.PtStr = RtpPayload2Str("RTSP", int(p.PayloadType))
-	//rs.log.Printf("V=%d, P=%d, X=%d, CC=%d, M=%d, PT=%d(%s), Seq=%d, TS=%d, SSRC=%d, Len=%d", p.Version, p.Padding, p.Extension, p.CsrcCount, p.Marker, p.PayloadType, p.PtStr, p.SeqNumber, p.Timestamp, p.Ssrc, p.Len)
+	//rs.log.Printf("V=%d, P=%d, X=%d, CC=%d, M=%d, PT=%d(%s), Seq=%d, TS=%d, SSRC=%d, Len=%d", p.Version, p.Padding, p.Extension, p.CsrcCount, p.Marker, p.PayloadType, p.PtStr, p.SeqNum, p.Timestamp, p.Ssrc, p.Len)
 
 	l := len(rs.Rtp2RtmpChan)
 	if RtmpSend == true {
@@ -361,7 +361,7 @@ func RtspRtpHandler(rs *RtspStream, d []byte, RtmpSend bool) error {
 		if l < conf.Rtsp.Rtp2RtmpChanNum {
 			rs.Rtp2RtmpChan <- p
 		} else {
-			rs.log.Printf("%s Rtp2RtmpChanNum=%d(%d) drop seq=%d(%s) data", rs.StreamId, l, conf.Rtsp.Rtp2RtmpChanNum, p.SeqNumber, p.PtStr)
+			rs.log.Printf("%s Rtp2RtmpChanNum=%d(%d) drop seq=%d(%s) data", rs.StreamId, l, conf.Rtsp.Rtp2RtmpChanNum, p.SeqNum, p.PtStr)
 		}
 	}
 
@@ -369,7 +369,7 @@ func RtspRtpHandler(rs *RtspStream, d []byte, RtmpSend bool) error {
 	if l < conf.Rtsp.Rtp2RtspChanNum {
 		rs.Rtp2RtspChan <- p
 	} else {
-		rs.log.Printf("%s Rtp2RtspChanNum=%d(%d) drop seq=%d(%s) data", rs.StreamId, l, conf.Rtsp.Rtp2RtspChanNum, p.SeqNumber, p.PtStr)
+		rs.log.Printf("%s Rtp2RtspChanNum=%d(%d) drop seq=%d(%s) data", rs.StreamId, l, conf.Rtsp.Rtp2RtspChanNum, p.SeqNum, p.PtStr)
 	}
 	return nil
 }

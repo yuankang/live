@@ -467,7 +467,7 @@ type RtpHeader struct {
 	CsrcCount   uint8    //4bit
 	Marker      uint8    //1bit
 	PayloadType uint8    //7bit, ffmpeg-5.1.2/libavformat/rtp.c
-	SeqNumber   uint16   //16bit, 值:0-65535
+	SeqNum      uint16   //16bit, 值:0-65535
 	Timestamp   uint32   //32bit
 	Ssrc        uint32   //32bit
 	Csrc        []uint32 //32bit
@@ -542,7 +542,7 @@ func RtpParse(d []byte) *RtpPacket {
 	rp.PayloadType = (d[n] >> 0) & 0x7f
 	n += 1
 
-	rp.SeqNumber = ByteToUint16(d[n:n+2], BE)
+	rp.SeqNum = ByteToUint16(d[n:n+2], BE)
 	n += 2
 	rp.Timestamp = ByteToUint32(d[n:n+4], BE)
 	n += 4
@@ -596,7 +596,7 @@ func RtpSinglePktParse(rs *RtspStream, p *AvPacket, rp *RtpPacket) error {
 		rs.log.Println(err)
 		return err
 	}
-	//rs.log.Printf("RtpSeq:%d, RtpTs:%d, RtpDataLen:%d, naluType=%d(%s)", rp.SeqNumber, rp.Timestamp, rp.Len, nh.Type, p.Type)
+	//rs.log.Printf("RtpSeq:%d, RtpTs:%d, RtpDataLen:%d, naluType=%d(%s)", rp.SeqNum, rp.Timestamp, rp.Len, nh.Type, p.Type)
 
 	p.Data = append(p.Data, rp.Data[n:]...)
 	return nil
@@ -785,7 +785,7 @@ func RtpStapaPktCreate(rs *RtspStream, sps, pps []byte, ts uint32) (*RtpPacket, 
 	rp.CsrcCount = 0
 	rp.Marker = 0
 	rp.PayloadType = 96
-	rp.SeqNumber = rs.VideoRtpPkgs.SendSeq
+	rp.SeqNum = rs.VideoRtpPkgs.SendSeq
 	rs.VideoRtpPkgs.SendSeq += 1
 	rp.Timestamp = ts
 	rp.Ssrc = 999999999
@@ -811,7 +811,7 @@ func RtpStapaPktCreate(rs *RtspStream, sps, pps []byte, ts uint32) (*RtpPacket, 
 	rp.Data[n] = ((rp.Marker & 0x1) << 7) | (rp.PayloadType & 0x7f)
 	n += 1
 
-	Uint16ToByte(rp.SeqNumber, rp.Data[n:n+2], BE)
+	Uint16ToByte(rp.SeqNum, rp.Data[n:n+2], BE)
 	n += 2
 	Uint32ToByte(rp.Timestamp, rp.Data[n:n+4], BE)
 	n += 4
@@ -860,7 +860,7 @@ func RtpSinglePktCreateAudio(rs *RtspStream, c *Chunk) (*RtpPacket, error) {
 	rp.CsrcCount = 0
 	rp.Marker = 0
 	rp.PayloadType = 97
-	rp.SeqNumber = rs.AudioRtpPkgs.SendSeq
+	rp.SeqNum = rs.AudioRtpPkgs.SendSeq
 	rs.AudioRtpPkgs.SendSeq += 1
 	rp.PtStr = "Audio"
 	rp.Timestamp = c.Timestamp * 11
@@ -877,7 +877,7 @@ func RtpSinglePktCreateAudio(rs *RtspStream, c *Chunk) (*RtpPacket, error) {
 	rp.Data[n] = ((rp.Marker & 0x1) << 7) | (rp.PayloadType & 0x7f)
 	n += 1
 
-	Uint16ToByte(rp.SeqNumber, rp.Data[n:n+2], BE)
+	Uint16ToByte(rp.SeqNum, rp.Data[n:n+2], BE)
 	n += 2
 	Uint32ToByte(rp.Timestamp, rp.Data[n:n+4], BE)
 	n += 4
@@ -906,7 +906,7 @@ func RtpSinglePktCreateVideo(rs *RtspStream, c *Chunk) (*RtpPacket, error) {
 	rp.CsrcCount = 0
 	rp.Marker = 0
 	rp.PayloadType = 96
-	rp.SeqNumber = rs.VideoRtpPkgs.SendSeq
+	rp.SeqNum = rs.VideoRtpPkgs.SendSeq
 	rs.VideoRtpPkgs.SendSeq += 1
 	rp.PtStr = "Video"
 	rp.Timestamp = c.Timestamp * 90
@@ -923,7 +923,7 @@ func RtpSinglePktCreateVideo(rs *RtspStream, c *Chunk) (*RtpPacket, error) {
 	rp.Data[n] = ((rp.Marker & 0x1) << 7) | (rp.PayloadType & 0x7f)
 	n += 1
 
-	Uint16ToByte(rp.SeqNumber, rp.Data[n:n+2], BE)
+	Uint16ToByte(rp.SeqNum, rp.Data[n:n+2], BE)
 	n += 2
 	Uint32ToByte(rp.Timestamp, rp.Data[n:n+4], BE)
 	n += 4
@@ -952,7 +952,7 @@ func RtpSinglePktCreate(rs *RtspStream, c *Chunk) ([]*RtpPacket, error) {
 	}
 	rps = append(rps, rp)
 
-	//rs.log.Printf("V=%d, P=%d, X=%d, CC=%d, M=%d, PT=%d(%s), Seq=%d, TS=%d, SSRC=%d, Len=%d", rp.Version, rp.Padding, rp.Extension, rp.CsrcCount, rp.Marker, rp.PayloadType, rp.PtStr, rp.SeqNumber, rp.Timestamp, rp.Ssrc, rp.Len)
+	//rs.log.Printf("V=%d, P=%d, X=%d, CC=%d, M=%d, PT=%d(%s), Seq=%d, TS=%d, SSRC=%d, Len=%d", rp.Version, rp.Padding, rp.Extension, rp.CsrcCount, rp.Marker, rp.PayloadType, rp.PtStr, rp.SeqNum, rp.Timestamp, rp.Ssrc, rp.Len)
 	return rps, nil
 }
 
@@ -965,12 +965,12 @@ func RtpFuaPktCreate1(rs *RtspStream, fui FuIndicator, fuh FuHeader, c *Chunk) (
 	rp.Marker = 0
 	if strings.Contains(c.DataType, "Video") {
 		rp.PayloadType = 96
-		rp.SeqNumber = rs.VideoRtpPkgs.SendSeq
+		rp.SeqNum = rs.VideoRtpPkgs.SendSeq
 		rs.VideoRtpPkgs.SendSeq += 1
 		rp.PtStr = "Video"
 	} else {
 		rp.PayloadType = 97
-		rp.SeqNumber = rs.AudioRtpPkgs.SendSeq
+		rp.SeqNum = rs.AudioRtpPkgs.SendSeq
 		rs.AudioRtpPkgs.SendSeq += 1
 		rp.PtStr = "Audio"
 	}
@@ -995,7 +995,7 @@ func RtpFuaPktCreate1(rs *RtspStream, fui FuIndicator, fuh FuHeader, c *Chunk) (
 	rp.Data[n] = ((rp.Marker & 0x1) << 7) | (rp.PayloadType & 0x7f)
 	n += 1
 
-	Uint16ToByte(rp.SeqNumber, rp.Data[n:n+2], BE)
+	Uint16ToByte(rp.SeqNum, rp.Data[n:n+2], BE)
 	n += 2
 	Uint32ToByte(rp.Timestamp, rp.Data[n:n+4], BE)
 	n += 4
@@ -1010,7 +1010,7 @@ func RtpFuaPktCreate1(rs *RtspStream, fui FuIndicator, fuh FuHeader, c *Chunk) (
 	copy(rp.Data[n:], c.MsgData)
 	n += int(c.MsgLength)
 
-	//rs.log.Printf("V=%d, P=%d, X=%d, CC=%d, M=%d, PT=%d(%s), Seq=%d, TS=%d, SSRC=%d, Len=%d", rp.Version, rp.Padding, rp.Extension, rp.CsrcCount, rp.Marker, rp.PayloadType, rp.PtStr, rp.SeqNumber, rp.Timestamp, rp.Ssrc, rp.Len)
+	//rs.log.Printf("V=%d, P=%d, X=%d, CC=%d, M=%d, PT=%d(%s), Seq=%d, TS=%d, SSRC=%d, Len=%d", rp.Version, rp.Padding, rp.Extension, rp.CsrcCount, rp.Marker, rp.PayloadType, rp.PtStr, rp.SeqNum, rp.Timestamp, rp.Ssrc, rp.Len)
 	return rp, nil
 }
 
