@@ -155,7 +155,8 @@ NalUnitType=5/7/8时 NRI必须是11
 type NaluHeader struct {
 	ForbiddenZeroBit uint8 //1bit, 必须为0, 1表示语法错误, 整包将被丢弃
 	NalRefIdc        uint8 //2bit, 值越大约重要, 00:解码器可以丢弃,
-	NalUnitType      uint8 //5bit
+	NaluType         uint8 //5bit
+	NalUnitType      uint8 //不用这个, 最后要删除
 }
 
 type NaluHeaderH264 struct {

@@ -2,11 +2,11 @@ package main
 
 import (
 	"bytes"
+	"container/list"
 	"fmt"
 	"io"
 	"log"
 	"net"
-	"utils"
 )
 
 /*************************************************/
@@ -128,6 +128,35 @@ func RtpData2RtmpMsg(s *Stream) (*Chunk, error) {
 	return &c, nil
 }
 
+func RtpPkts2PsPkt(s *Stream) (*PsPacket, error) {
+	var rp *RtpPacket
+	var err error
+	var n *list.Element
+	psp := &PsPacket{}
+
+	for e := s.RtpPktList.Front(); e != nil; e = n {
+		rp = (e.Value).(*RtpPacket)
+
+		if s.RtpPktCtTs != int64(rp.Timestamp) {
+			s.log.Printf("RtpPktCtTs=%d != RtpPktTs=%d", s.RtpPktCtTs, rp.Timestamp)
+			break
+		}
+		psp.Timestamp = rp.Timestamp
+		//s.log.Printf("Seq=%d, Mark=%d, Ts=%d", rp.SeqNum, rp.Marker, rp.Timestamp)
+
+		if rp.PayloadType != 0x60 {
+			s.log.Printf("Rtp PayloadType=%d(%s) is not ps", rp.PayloadType, rp.PtStr)
+		}
+
+		psp.Data = append(psp.Data, rp.Data[12:]...)
+
+		n = e.Next()
+		s.RtpPktList.Remove(e)
+	}
+	psp.Type = "PsPkt"
+	return psp, err
+}
+
 /*************************************************/
 /* rtp udp
 /*************************************************/
@@ -184,7 +213,7 @@ func RtpReceiverUdp(c *net.UDPConn) {
 }
 
 func RtpServerUdp() {
-	addr := fmt.Sprintf(":%s", conf.RtpRtcp.FixedRtpPort)
+	addr := fmt.Sprintf(":%d", conf.RtpRtcp.FixedRtpPort)
 	log.Printf("listen rtp(udp) on %s", addr)
 
 	laddr, _ := net.ResolveUDPAddr("udp", addr)
@@ -200,95 +229,68 @@ func RtpServerUdp() {
 /* rtp tcp
 /*************************************************/
 func RtpHandler(s *Stream) {
-	var rps []RtpPacket
-	var rp RtpPacket
+	//var rps []*RtpPacket
+	var rp *RtpPacket
 	var ok bool
+	var psp *PsPacket
 	var err error
 
 	for {
 		rp, ok = <-s.RtpChan
 		if ok == false {
-			s.log.Println(err)
+			s.log.Printf("StreamId=%s, RtpHandler() stop", s.StreamId)
 			break
 		}
-		s.log.Printf("==> SeqNum=%d, RtpPktListHeadSeq=%d, RtpPktListTailSeq", rp.SeqNum, s.RtpPktListHeadSeq, s.RtpPktListTailSeq)
+		s.log.Printf("--> RtpLen=%d(0x%x), SeqNum=%d, Pt=%s(%d), Ts=%d, Mark=%d, lhSeq=%d, ltSeq=%d", rp.Len, rp.Len, rp.SeqNum, rp.PtStr, rp.PayloadType, rp.Timestamp, rp.Marker, s.RtpPktListHeadSeq, s.RtpPktListTailSeq)
+		//s.log.Printf("rp.Len=%d, n=%d, Data=%x", rp.Len, n, rp.Data[:])
 
-		//0, 1, ..., 65534, 65535, 0, 1, ..., 65535, 0, ...
-		//SeqNum=0, HeadSeq=0, TailSeq=0
-		//SeqNum=1, HeadSeq=0, TailSeq=1
-		//SeqNum=4, HeadSeq=0, TailSeq=2
-		//SeqNum=2, HeadSeq=0, TailSeq=5
-		//SeqNum=3, HeadSeq=0, TailSeq=5
-		//SeqNum=5, HeadSeq=0, TailSeq=5
-		//SeqNum=6, HeadSeq=0, TailSeq=6
-		//......
-		//SeqNum=65534, HeadSeq=0, TailSeq=65534
-		//SeqNum=65535, HeadSeq=0, TailSeq=65535
-		//SeqNum=0, HeadSeq=0, TailSeq=0
-		if rp.SeqNum >= s.RtpPktListTailSeq {
-			s.RtpPktList.PushBack(rp)
-			s.RtpPktListTailSeq = rp.SeqNum + 1
+		if s.RtpPktNeedSeq != rp.SeqNum {
+			s.log.Printf("RtpNeedSeq=%d, RtpSeq=%d", s.RtpPktNeedSeq, rp.SeqNum)
+		}
+		s.RtpPktList.PushBack(rp) //从尾部插入, 绝大多数是这种
+		s.RtpPktNeedSeq = rp.SeqNum + 1
+
+		//rtp.Mark==1 表示一帧画面的最后一个rtp包到了
+		//TODO: rtp.Ts不相等 表示一帧画面的第一个rtp包到了
+		if rp.Marker == 0 && s.RtpPktCtTs == int64(rp.Timestamp) {
+			continue
+		}
+
+		//PrintList(s, &s.RtpPktList)
+		psp, err = RtpPkts2PsPkt(s)
+		//PrintList(s, &s.RtpPktList)
+		if err != nil {
+			s.log.Println(err)
+			continue
+		}
+
+		if rp.Marker == 1 {
+			s.RtpPktCtTs = -1
 		} else {
-			if rp.SeqNum < s.RtpPktListHeadSeq {
-				continue //直接扔掉
-			} else {
-				//cache这个RtpPacket, 然后记录等待次数
-				s.RtpPkgCache.Store(rp.SeqNum, rp)
-
-				if s.RtpSeqWait < 5 {
-					s.RtpSeqWait += 1
-					s.log.Printf("RtpSeqThis=%d, RtpSeqNeed=%d, RtpSeqWait=%d", rp.SeqNum, s.RtpSeqNeed, s.RtpSeqWait)
-					continue
-				}
-				s.RtpSeqWait = 0
-
-				//已经等了5个包, 还是没有来 需要的rtp包
-				//此时不在等了, 并且需要处理s.RtpPkgCache中的所有rtp包
-				s.log.Printf("RtpSeqNeed=%d lost", s.RtpSeqNeed)
-				s.RtpSeqNeed += 1
-
-				RtpPkgCacheLen := utils.SyncMapLen(&s.RtpPkgCache)
-				for i := 0; i < RtpPkgCacheLen; i++ {
-					v, ok := s.RtpPkgCache.Load(s.RtpSeqNeed)
-					if ok == false { //rtp包序号不连续, 停止查找
-						s.log.Printf("RtpPkgCache haven't RtpSeq=%d", s.RtpSeqNeed)
-						break
-					}
-					s.log.Printf("RtpPkgCache have RtpSeq=%d", s.RtpSeqNeed)
-
-					rp, _ = v.(RtpPacket)
-					rps = append(rps, rp)
-					s.RtpPkgCache.Delete(s.RtpSeqNeed)
-					s.RtpSeqNeed++
-				}
-			}
+			s.RtpPktCtTs = int64(rp.Timestamp)
 		}
+		s.log.Printf("RtpPktCtTs=%d", s.RtpPktCtTs)
 
-		rpsLen := len(rps)
-		for i := 0; i < rpsLen; i++ {
-			rp = rps[i]
-			s.log.Printf("%d, Len=%d, UseNum=%d, SeqNum=%d, ssrc=%.10d, PT=%d(%s), ts=%d", i, rp.Len, rp.UseNum, rp.SeqNum, rp.Ssrc, rp.PayloadType, rp.PtStr, rp.Timestamp)
-
-			switch rp.PayloadType {
-			case 0x08: //08 G.711a
-				s.log.Printf("PT=%d, %s", rp.PayloadType, rp.PtStr)
-			case 0x60: //96 PS
-				//s.log.Printf("PT=%d, %s", rp.PayloadType, rp.PtStr)
-				err = ParsePs(s, &rp)
-			case 0x61: //97 AAC
-				s.log.Printf("PT=%d, %s", rp.PayloadType, rp.PtStr)
-			case 0x62: //98 H264
-				s.log.Printf("PT=%d, %s", rp.PayloadType, rp.PtStr)
-			default:
-				s.log.Println("RtpPayloadType is Undefined %d", rp.PayloadType)
-			}
-
-			if err != nil && err != io.EOF {
-				s.log.Println(err)
-			}
+		//TODO: 通过chan发送给rtmp发送程序
+		s.log.Printf("PsPacket Type=%s, Ts=%d, PsPktDataLen=%d", psp.Type, psp.Timestamp, len(psp.Data))
+		err = ParsePs(s, psp)
+		if err != nil {
+			s.log.Println(err)
 		}
-		rps = nil //清空切片
 	}
+}
+
+func PrintList(s *Stream, l *list.List) {
+	s.log.Println(">>>>>> print list <<<<<<")
+	var rp *RtpPacket
+	var i int
+
+	for e := l.Front(); e != nil; e = e.Next() {
+		rp = (e.Value).(*RtpPacket)
+		s.log.Printf("Seq=%d, Mark=%d, Ts=%d", rp.SeqNum, rp.Marker, rp.Timestamp)
+		i++
+	}
+	s.log.Printf("list node num is %d", i)
 }
 
 /*
@@ -311,7 +313,7 @@ func RtpReceiverTcp(c net.Conn) {
 			if s != nil {
 				s.log.Println(err)
 				StreamMap.Delete(s.Key)
-				SsrcMap.Delete(s.RtpSsrcUint32)
+				SsrcMap.Delete(s.RtpSsrcUint)
 			}
 			break
 		}
@@ -323,16 +325,10 @@ func RtpReceiverTcp(c net.Conn) {
 			break
 		}
 
-		n := l - 10
-		if n < 0 {
-			n = 0
-		}
-		log.Println("RtpPkg tcp, Len=%d, Data=%x", l, d[n:])
-
 		rp = RtpParse(d)
 		//首个rtp包, 进不去; 首个rtp会进入SsrcFindStream();
-		if s != nil && rp.Ssrc != s.RtpSsrcUint32 {
-			s.log.Printf("RtpSsrc=%.10d != MySsrc=%.10d, drop RtpPacket", rp.Ssrc, s.RtpSsrcUint32)
+		if s != nil && rp.Ssrc != s.RtpSsrcUint {
+			s.log.Printf("RtpSsrc=%.10d != MySsrc=%.10d, drop RtpPacket", rp.Ssrc, s.RtpSsrcUint)
 			continue
 		}
 
@@ -346,14 +342,19 @@ func RtpReceiverTcp(c net.Conn) {
 
 			s.Conn0 = c
 			s.RemoteAddr = c.RemoteAddr().String()
-			s.RtpChan = make(chan RtpPacket, 100)
+			s.RtpChan = make(chan *RtpPacket, 100)
 			//s.RtpRecChan = make(chan RtpPacket, 100)
 			//s.FrameChan = make(chan Frame, 100)
 			s.RtpSeqNeed = rp.SeqNum
 
+			log.Printf("rAddr=%s, ssrc=%.10d, streamId=%s", s.RemoteAddr, rp.Ssrc, s.Key)
+			s.log.Printf("rAddr=%s, ssrc=%.10d, streamId=%s", s.RemoteAddr, rp.Ssrc, s.Key)
+			s.log.Printf("%#v", rp.RtpHeader)
+
 			//s.RtpPktList
 			s.RtpPktListHeadSeq = rp.SeqNum
 			s.RtpPktListTailSeq = rp.SeqNum
+			s.RtpPktNeedSeq = rp.SeqNum
 			//s.RtpPktListMutex   sync.Mutex //rtplist锁, 防止插入和删除并发
 
 			//go Gb281812Mem2RtmpServer(s)
@@ -361,26 +362,31 @@ func RtpReceiverTcp(c net.Conn) {
 			go RtpHandler(s)
 			//go RtpRec(s)
 		}
-		s.log.Printf("oIp=%s, rtpLen=%d(%x), seqNum=%d, %#v", s.RemoteAddr, rp.Len, rp.Len, rp.SeqNum, rp.RtpHeader)
+		if s.RtpPktCtTs == -1 {
+			s.RtpPktCtTs = int64(rp.Timestamp)
+		}
+		//s.log.Printf("RtpLen=%d(0x%x), SeqNum=%d, Pt=%s(%d), Ts=%d, Mark=%d", rp.Len, rp.Len, rp.SeqNum, rp.PtStr, rp.PayloadType, rp.Timestamp, rp.Marker)
 
 		if len(s.RtpChan) < 100 {
-			s.RtpChan <- *rp
+			s.RtpChan <- rp
 		} else {
 			s.log.Printf("RtpChanLen=%d", len(s.RtpChan))
 		}
 
-		if len(s.RtpRecChan) < 100 {
-			s.RtpRecChan <- *rp
-		} else {
-			s.log.Printf("RtpRecChanLen=%d", len(s.RtpRecChan))
-		}
+		/*
+			if len(s.RtpRecChan) < 100 {
+				s.RtpRecChan <- *rp
+			} else {
+				s.log.Printf("RtpRecChanLen=%d", len(s.RtpRecChan))
+			}
+		*/
 	}
 	//TODO 回收资源
 	c.Close()
 }
 
 func RtpServerTcp() {
-	addr := fmt.Sprintf(":%s", conf.RtpRtcp.FixedRtpPort)
+	addr := fmt.Sprintf(":%d", conf.RtpRtcp.FixedRtpPort)
 	log.Printf("listen rtp(tcp) on %s", addr)
 
 	l, err := net.Listen("tcp", addr)
@@ -396,7 +402,7 @@ func RtpServerTcp() {
 			continue
 		}
 		log.Println("------ new rtp(tcp) connect ------")
-		log.Println("RemoteAddr:", c.RemoteAddr().String())
+		//log.Println("RemoteAddr:", c.RemoteAddr().String())
 
 		//有些ipc的音频和视频数据是通过不同端口发送的,
 		//音频端口建连后会马上断开, 音频数据还是通过视频端口过来

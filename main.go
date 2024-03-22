@@ -142,8 +142,8 @@ type GB28181Conf struct {
 }
 
 type RtpRtcpConf struct {
-	FixedRtpPort  string
-	FixedRtcpPort string
+	FixedRtpPort  int
+	FixedRtcpPort int
 	RangePortMin  int
 	RangePortMax  int
 }

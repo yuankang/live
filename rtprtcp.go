@@ -557,6 +557,7 @@ func RtpParse(d []byte) *RtpPacket {
 	rp.Data = d
 	rp.Len = uint16(len(d))
 	rp.UseNum += n
+	rp.PtStr = RtpPayload2Str("GB28181", int(rp.PayloadType))
 	return rp
 }
 

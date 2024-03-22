@@ -165,17 +165,6 @@ func CalcGopBitrate(s *Stream, c Chunk) {
 	//s.log.Printf("GopNum=%d, MsgLen=%d, DataSize=%d, DataType=%s", s.GopNum, c.MsgLength, s.GopDataSize, c.DataType)
 }
 
-func PrintList(s *Stream, l *list.List) {
-	s.log.Println(">>>>>> s.MediaData list <<<<<<")
-	var c *Chunk
-	var i uint
-	for e := l.Front(); e != nil; e = e.Next() {
-		c = (e.Value).(*Chunk)
-		s.log.Println(i, c.DataType, c.MsgLength, c.Timestamp)
-		i++
-	}
-}
-
 func sGopCacheSendRtmp(rs *Stream, s *Stream, gop *GopCache) {
 	// 1 发送Metadata
 	s.log.Println("<== send Metadata")

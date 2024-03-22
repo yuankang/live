@@ -3,8 +3,8 @@ package main
 import (
 	"container/list"
 	"fmt"
-	"log"
 	"sync"
+	"utils"
 )
 
 type Gb28181Stream struct {
@@ -14,14 +14,12 @@ type Gb28181Stream struct {
 //streamlog/GSP3bnx69BgxI-guCc0oo88s/play_rtmp_192.168.109.57:50471.log
 func NewGb28181Stream(key string, rqst GbRqst) (*Stream, error) {
 	var s Stream
-	/*
-		s.Key = key
-		s.Type = "GbPub"
-		s.GbRqst = rqst
+	s.Key = key
+	s.Type = "GbPub"
+	s.GbRqst = rqst
 
-		s.LogFn = fmt.Sprintf("%s/%s/publish_rtp_%s.log", conf.Log.StreamPath, rqst.StreamId, utils.GetYMD())
-		s.log, s.logFp, _ = StreamLogCreate(s.LogFn)
-	*/
+	s.LogFn = fmt.Sprintf("%s/%s/GbPub_%s.log", conf.Log.StreamLogPath, rqst.StreamId, utils.GetYMD())
+	s.log, s.LogFp, _ = StreamLogCreate(s.LogFn)
 	return &s, nil
 }
 
@@ -51,12 +49,9 @@ func SsrcFindStream(ssrc uint32) (*Stream, error) {
 	v, ok := SsrcMap.Load(ssrc)
 	if ok == false {
 		err = fmt.Errorf("unkonw ssrc %.10d", ssrc)
-		log.Println(err)
 		return nil, err
 	}
 	s := v.(*Stream)
-
-	log.Printf("ssrc %.10d is %s", ssrc, s.Key)
 	return s, nil
 }
 
@@ -72,6 +67,8 @@ type GbPub struct {
 	RtpPktListHeadSeq uint16     //rtplist首节点的rtpseq值
 	RtpPktListTailSeq uint16     //rtplist尾节点的rtpseq值
 	RtpPktListMutex   sync.Mutex //rtplist锁, 防止插入和删除并发
+	RtpPktNeedSeq     uint16     //下一个rtp包的seq
+	RtpPktCtTs        int64      //帧的第一个rtp包的时间戳 CurrentTimestamp
 
 	RtpSeqNeed  uint16   //期待的rtp包序号
 	RtpSeqWait  uint16   //期待的rtp包序号, 等了多少次
@@ -86,7 +83,7 @@ type GbPub struct {
 }
 
 /*
-## 数据封装格式
+## RtpTcp数据封装格式
 rtpTcp包
 rtp包长度		2字节
 rtpheader 		12字节, 有数据类型, 有音视频各自的序号, 有时间戳, 有ssrc

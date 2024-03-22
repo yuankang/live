@@ -250,17 +250,17 @@ func StreamStateReport(s *Stream, state int) {
 /* GB28181业务请求
 /*************************************************/
 type GbRqst struct {
-	App              string `json:"app"`
-	StreamId         string `json:"streamId"`
-	TransType        string `json:"transType"` //tcp/udp
-	ConnType         string `json:"connType"`  //主被动
-	RtpSsrc          string `json:"rtpSsrc"`
-	RtpSsrcUint32    uint32 //要能存放下10位数
-	RtpSsrcTmp       string //长度为10的字符串
-	RtpSsrcTmpUint32 uint32 //要能存放下10位数
-	RemoteIp         string `json:"remoteIp"`
-	RemoteVideoPort  int    `json:"remoteRtpVideoPort"`
-	RemoteAudioPort  int    `json:"remoteRtpAudioPort"`
+	App             string `json:"app"`
+	StreamId        string `json:"streamId"`
+	TransType       string `json:"transType"` //tcp/udp
+	ConnType        string `json:"connType"`  //主被动
+	RtpSsrc         string `json:"rtpSsrc"`
+	RtpSsrcTmp      string //长度为10的字符串
+	RtpSsrcUint     uint32 //要能存放下10位数
+	RtpSsrcUintTmp  uint32 //要能存放下10位数
+	RemoteIp        string `json:"remoteIp"`
+	RemoteVideoPort int    `json:"remoteRtpVideoPort"`
+	RemoteAudioPort int    `json:"remoteRtpAudioPort"`
 }
 
 type GbRsps struct {
@@ -277,9 +277,9 @@ type DataPort struct {
 	Rtcp int `json:"rtcp"`
 }
 
-//POST /api/v1/gb28181?app=slivegateway&action=create_pullChannel
-//{"app":"SP3bnx69BgxI","streamId":"GSP3bnx69BgxI-gCec0oMfJT","transType":"tcp","connType":"passive","rtpSsrc":"0108004678"}
-//{"code":200,"message":"SUCCESS","streamId":"GSP3bnx69BgxI-gCec0oMfJT","ip":"0.0.0.0","tcpPort":{"rtp":9020,"rtcp":9021}}
+//POST /api/v1/gb28181?app=slivegateway&action=create_pullChannel&ts=1710498633346&token=29f230208992a5a6f521e279788a973d
+//{"app":"SPq4nchhCcSk","streamId":"GSPq4nchhCcSk-acuv6p3262","transType":"tcp","connType":"passive","rtpSsrc":"0000003182","type":0}
+//{"code":200,"message":"SUCCESS","ip":"0.0.0.0","tcpPort":{"rtp":9020,"rtcp":9021}}
 func GB28181Create(w http.ResponseWriter, r *http.Request, d []byte) ([]byte, error) {
 	var rqst GbRqst
 	err := json.Unmarshal(d, &rqst)
@@ -287,13 +287,13 @@ func GB28181Create(w http.ResponseWriter, r *http.Request, d []byte) ([]byte, er
 		log.Println(err)
 		return nil, err
 	}
-	//log.Printf("%#v", rqst)
 
 	rqst.RtpSsrcTmp = rqst.RtpSsrc
 	n, _ := strconv.ParseUint(rqst.RtpSsrc, 10, 0)
-	rqst.RtpSsrcUint32 = uint32(n)
-	rqst.RtpSsrcTmpUint32 = uint32(n)
-	key := fmt.Sprintf("%s_%s", rqst.App, rqst.StreamId)
+	rqst.RtpSsrcUint = uint32(n)
+	rqst.RtpSsrcUintTmp = uint32(n)
+	//key := fmt.Sprintf("%s_%s", rqst.App, rqst.StreamId)
+	key := fmt.Sprintf("%s", rqst.StreamId)
 	log.Printf("stream key %s", key)
 
 	_, ok := StreamMap.Load(key)
@@ -304,12 +304,12 @@ func GB28181Create(w http.ResponseWriter, r *http.Request, d []byte) ([]byte, er
 	}
 
 	s, _ := NewGb28181Stream(key, rqst)
-	//log.Printf("log %s", s.LogFn)
+	log.Printf("log %s", s.LogFn)
 	s.log.Println("==============================")
-	//s.log.Printf("%#v", s.GbRqst)
+	s.log.Printf("%#v", rqst)
 
 	StreamMap.Store(key, s)
-	SsrcMap.Store(rqst.RtpSsrcUint32, s)
+	SsrcMap.Store(rqst.RtpSsrcUint, s)
 
 	var rsps GbRsps
 	rsps.Code = 200
@@ -318,10 +318,10 @@ func GB28181Create(w http.ResponseWriter, r *http.Request, d []byte) ([]byte, er
 	rsps.Ip = conf.IpOuter
 
 	var tcp, udp DataPort
-	tcp.Rtp, _ = strconv.Atoi(conf.RtpRtcp.FixedRtpPort)
-	tcp.Rtcp, _ = strconv.Atoi(conf.RtpRtcp.FixedRtcpPort)
-	udp.Rtp, _ = strconv.Atoi(conf.RtpRtcp.FixedRtpPort)
-	udp.Rtcp, _ = strconv.Atoi(conf.RtpRtcp.FixedRtcpPort)
+	tcp.Rtp = conf.RtpRtcp.FixedRtpPort
+	tcp.Rtcp = conf.RtpRtcp.FixedRtcpPort
+	udp.Rtp = conf.RtpRtcp.FixedRtpPort
+	udp.Rtcp = conf.RtpRtcp.FixedRtcpPort
 	rsps.TcpPort = &tcp
 	rsps.UdpPort = &udp
 
@@ -330,101 +330,88 @@ func GB28181Create(w http.ResponseWriter, r *http.Request, d []byte) ([]byte, er
 	return dd, nil
 }
 
-//POST /api/v1/gb28181?app=slivegateway&action=start_pullChannel
-//{"remoteIp":"10.3.220.156","remoteRtpAudioPort":0,"remoteRtpVideoPort":10004,"streamId":"GSP3bnx69BgxI-gCec0oMfJT","rtpSsrc":"0108004678"}
+//POST /api/v1/gb28181?app=slivegateway&action=start_pullChannel&ts=1710499535067&token=4ef9f1b00ddca8e29e20cabfc7045fcc
+//{"remoteIp":"172.16.20.110","remoteRtpAudioPort":0,"remoteRtpVideoPort":15060,"streamId":"GSPq4nchhCcSk-acuv6p3262","rtpSsrc":"0000000842"}
 //{"code":200,"message":"SUCCESS","streamId":"GSP3bnx69BgxI-gCec0oMfJT"}
 func GB28181Start(w http.ResponseWriter, r *http.Request, d []byte) ([]byte, error) {
-	/*
-		var rqst GbRqst
-		err := json.Unmarshal(d, &rqst)
-		if err != nil {
-			log.Println(err)
-			return nil, err
-		}
-		//log.Printf("%#v", rqst)
+	var rqst GbRqst
+	err := json.Unmarshal(d, &rqst)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
 
-		if len(rqst.StreamId) < 13 {
-			err = fmt.Errorf("streamId %s len < 13", rqst.StreamId)
-			log.Println(err)
-			return nil, err
-		}
+	//key := fmt.Sprintf("%s_%s", rqst.App, rqst.StreamId)
+	key := fmt.Sprintf("%s", rqst.StreamId)
+	log.Printf("stream key %s", key)
 
-		key := fmt.Sprintf("%s_%s", rqst.StreamId[1:13], rqst.StreamId)
-		log.Printf("stream key %s", key)
+	v, ok := StreamMap.Load(key)
+	if ok == false { //流id不存在, 断开连接并返回错误
+		err = fmt.Errorf("streamId %s is't exist", key)
+		log.Println(err)
+		return nil, err
+	}
+	s := v.(*Stream)
 
-		v, ok := StreamMap.Load(key)
-		if ok == false { //流id不存在, 断开连接并返回错误
-			err = fmt.Errorf("streamId %s is't exist", key)
-			log.Println(err)
-			return nil, err
-		}
-		s := v.(*Stream)
+	s.GbRqst.RtpSsrc = rqst.RtpSsrc
+	n, _ := strconv.ParseUint(rqst.RtpSsrc, 10, 0)
+	s.GbRqst.RtpSsrcUint = uint32(n)
+	s.GbRqst.RemoteIp = rqst.RemoteIp
+	s.GbRqst.RemoteVideoPort = rqst.RemoteVideoPort
+	s.GbRqst.RemoteAudioPort = rqst.RemoteAudioPort
+	s.log.Printf("%#v", rqst)
+	//s.log.Printf("%#v", s.GbRqst)
 
-		s.GbRqst.RtpSsrc = rqst.RtpSsrc
-		n, _ := strconv.ParseUint(rqst.RtpSsrc, 10, 0)
-		s.GbRqst.RtpSsrcUint32 = uint32(n)
-		s.GbRqst.RemoteIp = rqst.RemoteIp
-		s.GbRqst.RemoteVideoPort = rqst.RemoteVideoPort
-		s.GbRqst.RemoteAudioPort = rqst.RemoteAudioPort
-		//s.log.Printf("%#v", s)
-		s.log.Printf("%#v", s.GbRqst)
+	if s.GbRqst.RtpSsrcTmp != s.GbRqst.RtpSsrc {
+		SsrcMap.Delete(s.GbRqst.RtpSsrcUintTmp)
+		SsrcMap.Store(s.GbRqst.RtpSsrcUint, s)
+	}
 
-		if s.GbRqst.RtpSsrcTmp != s.GbRqst.RtpSsrc {
-			SsrcMap.Delete(s.GbRqst.RtpSsrcTmpUint32)
-			SsrcMap.Store(s.GbRqst.RtpSsrcUint32, &s)
-		}
+	var rsps GbRsps
+	rsps.Code = 200
+	rsps.Msg = "ok"
+	rsps.StreamId = rqst.StreamId
 
-		var rsps GbRsps
-		rsps.Code = 200
-		rsps.Msg = "ok"
-		rsps.StreamId = rqst.StreamId
-
-		dd, _ := json.Marshal(rsps)
-		log.Println(string(dd))
-		return dd, nil
-	*/
-	return nil, nil
+	dd, _ := json.Marshal(rsps)
+	log.Println(string(dd))
+	return dd, nil
 }
 
 //POST /api/v1/gb28181?app=slivegateway&action=delete_pullChannel
-//{"app":"SP3bnx69BgxI","streamId":"GSP3bnx69BgxI-guCc0oo88s"}
+//{"app":"SP3bnx69BgxI","streamId":"GSP3bnx69BgxI-avEc0oE4C4"}
 //{"code":200,"message":"SUCCESS","streamId":"GSP3bnx69BgxI-avEc0oE4C4"}
-//{"code":6002}
+//{"code":6002,"message":"stream unexist"}
 func GB28181Delete(w http.ResponseWriter, r *http.Request, d []byte) ([]byte, error) {
-	/*
-		var rqst GbRqst
-		err := json.Unmarshal(d, &rqst)
-		if err != nil {
-			log.Println(err)
-			return nil, err
-		}
-		//log.Printf("%#v", rqst)
+	var rqst GbRqst
+	err := json.Unmarshal(d, &rqst)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+	//log.Printf("%#v", rqst)
 
-		key := fmt.Sprintf("%s_%s", rqst.App, rqst.StreamId)
-		log.Println("Stream key is", key)
+	//key := fmt.Sprintf("%s_%s", rqst.App, rqst.StreamId)
+	key := fmt.Sprintf("%s", rqst.StreamId)
+	log.Println("stream key", key)
 
-		var rsps GbRsps
-		rsps.Code = 200
-		rsps.Msg = "ok"
-		rsps.StreamId = rqst.StreamId
+	var rsps GbRsps
+	rsps.Code = 200
+	rsps.Msg = "SUCCESS"
+	rsps.StreamId = rqst.StreamId
 
-		v, ok := StreamMap.Load(key)
-		if ok == false { //流id不存在, 断开连接并返回错误
-			err = fmt.Errorf("streamId %s is't exist", key)
-			//log.Println(err)
-			rsps.Msg = err.Error()
-			//return nil, err
-		} else {
-			s := v.(*Stream)
-			SsrcMap.Delete(s.GbRqst.RtpSsrcUint32)
-			StreamMap.Delete(key)
-		}
+	v, ok := StreamMap.Load(key)
+	if ok == false {
+		rsps.Code = 6002
+		rsps.Msg = "stream nunexist"
+	} else {
+		s := v.(*Stream)
+		SsrcMap.Delete(s.GbRqst.RtpSsrcUint)
+		StreamMap.Delete(key)
+	}
 
-		dd, _ := json.Marshal(rsps)
-		log.Println(string(dd))
-		return dd, nil
-	*/
-	return nil, nil
+	dd, _ := json.Marshal(rsps)
+	log.Println(string(dd))
+	return dd, nil
 }
 
 type PushStreamList struct {
@@ -435,29 +422,25 @@ type PushStreamList struct {
 }
 
 //GET /api/v1/gb28181?action=get_pushChannels
-//{"code":200,"message":"SUCCESS","timestamp":1673711021713,"streamList":[]}
-//{"code":200,"message":"ok","timestamp":1673742254762,"streamList":null}
+//{"code":200,"message":"success","streamList":[],"timestamp":1710499227164}
 func GB28181StreamList(w http.ResponseWriter, r *http.Request) ([]byte, error) {
-	/*
-		var rsps PushStreamList
-		rsps.Code = 200
-		rsps.Msg = "ok"
-		rsps.Ts = utils.GetTimestamp("ms")
+	var rsps PushStreamList
+	rsps.Code = 200
+	rsps.Msg = "success"
+	rsps.Ts = utils.GetTimestamp("ms")
 
-		var i int
-		var s *Stream
-		SsrcMap.Range(func(k, v interface{}) bool {
-			s, _ = v.(*Stream)
-			log.Printf("%d, ssrc=%.10d, streamid=%s", i, k, s.GbRqst.StreamId)
-			i++
-			return true
-		})
+	var i int
+	var s *Stream
+	SsrcMap.Range(func(k, v interface{}) bool {
+		s, _ = v.(*Stream)
+		log.Printf("%d, ssrc=%.10d, streamid=%s", i, k, s.GbRqst.StreamId)
+		i++
+		return true
+	})
 
-		dd, _ := json.Marshal(rsps)
-		log.Println(string(dd))
-		return dd, nil
-	*/
-	return nil, nil
+	dd, _ := json.Marshal(rsps)
+	log.Println(string(dd))
+	return dd, nil
 }
 
 //GET /api/v1/streamList

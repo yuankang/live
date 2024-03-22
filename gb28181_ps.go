@@ -2,11 +2,20 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"io"
 )
 
 /*************************************************/
 /* ParsePsHeader
 /*************************************************/
+type PsPacket struct {
+	Type      string
+	Timestamp uint32
+	Data      []byte
+	UseNum    int
+}
+
 //4+1+2+2+4+1+1*n=14+1*n
 type PsHeader struct {
 	PackStartCode      uint32 //32bit, 包起始码, 固定值0x000001BA
@@ -27,11 +36,12 @@ type PsHeader struct {
 	StuffingByte       []byte //8bit,  填充字节 0xff
 }
 
-func ParsePsHeader(s *Stream, rp *RtpPacket, r *bytes.Reader) (int, error) {
+func ParsePsHeader(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
 	var ph PsHeader
 	var n int
 
 	ph.PackStartCode = 0x000001ba
+
 	b8, err := ReadUint8(r)
 	if err != nil {
 		s.log.Println(err)
@@ -41,6 +51,7 @@ func ParsePsHeader(s *Stream, rp *RtpPacket, r *bytes.Reader) (int, error) {
 	ph.Reversed0 = (b8 >> 6) & 0x3
 	ph.ScrBase32_30 = (b8 >> 3) & 0x7
 	ph.MarkerBit0 = (b8 >> 2) & 0x1
+
 	b16, err := ReadUint16(r, 2, BE)
 	if err != nil {
 		s.log.Println(err)
@@ -49,6 +60,7 @@ func ParsePsHeader(s *Stream, rp *RtpPacket, r *bytes.Reader) (int, error) {
 	n += 2
 	ph.ScrBase29_15 = ((uint16(b8) & 0x3) << 13) | (b16 >> 3)
 	ph.MarkerBit1 = uint8((b16 >> 2) & 0x1)
+
 	b16a, err := ReadUint16(r, 2, BE)
 	if err != nil {
 		s.log.Println(err)
@@ -57,6 +69,7 @@ func ParsePsHeader(s *Stream, rp *RtpPacket, r *bytes.Reader) (int, error) {
 	n += 2
 	ph.ScrBase14_0 = ((b16 & 0x3) << 13) | (b16a >> 3)
 	ph.MarkerBit2 = uint8((b16a >> 2) & 0x1)
+
 	b8, err = ReadUint8(r)
 	if err != nil {
 		s.log.Println(err)
@@ -65,6 +78,7 @@ func ParsePsHeader(s *Stream, rp *RtpPacket, r *bytes.Reader) (int, error) {
 	n += 1
 	ph.ScrExtension = ((b16a & 0x3) << 7) | uint16(b8>>1)
 	ph.MarkerBit2 = b8 & 0x1
+
 	b32, err := ReadUint32(r, 4, BE)
 	if err != nil {
 		s.log.Println(err)
@@ -85,7 +99,7 @@ func ParsePsHeader(s *Stream, rp *RtpPacket, r *bytes.Reader) (int, error) {
 	n += int(ph.PackStuffingLength)
 
 	s.log.Printf("%#v, rLen=%d", ph, n)
-	rp.UseNum += uint16(n)
+	psp.UseNum += n
 	return n, nil
 }
 
@@ -123,7 +137,7 @@ type PsSysBound struct {
 	PStdBufferSizeBound  uint16 //13bit, 缓冲区大小界限, 若P-STD_buffer_bound_scale的值为'0'，则该字段以128字节为单位来度量缓冲区大小的边界。若P-STD_buffer_bound_scale的值为'1'，则该字段以1024字节为单位来度量缓冲区大小的边界。
 }
 
-func ParsePsSysHeader(s *Stream, rp *RtpPacket, r *bytes.Reader) (int, error) {
+func ParsePsSysHeader(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
 	var psh PsSystemHeader
 	var n int
 
@@ -165,7 +179,7 @@ func ParsePsSysHeader(s *Stream, rp *RtpPacket, r *bytes.Reader) (int, error) {
 	*/
 
 	s.log.Printf("%#v, rLen=%d", psh, n)
-	rp.UseNum += uint16(n)
+	psp.UseNum += n
 	return n, nil
 }
 
@@ -207,7 +221,7 @@ type PgmStreamInfo struct {
 	DescriptorData     []byte
 }
 
-func ParsePgmStreamMap(s *Stream, rp *RtpPacket, r *bytes.Reader) (int, error) {
+func ParsePgmStreamMap(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
 	var psm PgmStreamMap
 	var n int
 
@@ -242,7 +256,7 @@ func ParsePgmStreamMap(s *Stream, rp *RtpPacket, r *bytes.Reader) (int, error) {
 	n += 4
 
 	s.log.Printf("%#v, rLen=%d", psm, n)
-	rp.UseNum += uint16(n)
+	psp.UseNum += n
 	return n, nil
 }
 
@@ -280,7 +294,7 @@ func ParsePgmStreamInfo(s *Stream, r *bytes.Reader) int {
 		case 0x90:
 			s.AudioCodecType = "G711a"
 		default:
-			s.log.Printf("AudioFormat: %x, unknow", sm.StreamType)
+			s.log.Printf("AudioFormat=%x, unknow", sm.StreamType)
 		}
 		s.log.Printf("AudioCodecType=%s", s.AudioCodecType)
 	}
@@ -307,7 +321,7 @@ func IsTrailing(s *Stream, scb []byte) bool {
 	return true
 }
 
-func ParsePs(s *Stream, rp *RtpPacket) error {
+func ParsePs0(s *Stream, psp *PsPacket) error {
 	/*
 		r := bytes.NewReader(rp.Data[rp.UseNum:])
 
@@ -386,5 +400,51 @@ func ParsePs(s *Stream, rp *RtpPacket) error {
 			i++
 		}
 	*/
+	return nil
+}
+
+func ParsePs(s *Stream, psp *PsPacket) error {
+	r := bytes.NewReader(psp.Data[:])
+
+	var sc uint32
+	var err error
+	var i uint32
+	for {
+		sc, err = ReadUint32(r, 4, BE)
+		if err != nil {
+			if err != io.EOF {
+				s.log.Println(err)
+				return err
+			}
+			return nil
+		}
+		psp.UseNum += 4
+		s.log.Printf("-----> %d, StartCode=%#08x", i, sc)
+
+		//PS流总是以0x000001BA开始, 以0x000001B9结束
+		//对于PS文件 有且只有一个结束码0x000001B9, 对于直播PS流 没有结束码
+		switch sc {
+		case 0x000001ba:
+			_, err = ParsePsHeader(s, psp, r)
+		case 0x000001bb:
+			_, err = ParsePsSysHeader(s, psp, r)
+		case 0x000001bc:
+			_, err = ParsePgmStreamMap(s, psp, r)
+		case 0x000001c0:
+			_, err = ParseAudio(s, psp, r)
+			//s.log.Printf("AudioData:%x", psp.Data[psp.UseNum:])
+		case 0x000001e0:
+			_, err = ParseVideo(s, psp, r)
+			//s.log.Printf("VideoData:%x", psp.Data[psp.UseNum:])
+		default:
+			err = fmt.Errorf("undefined startcode %#08x", sc)
+		}
+
+		if err != nil {
+			s.log.Println(err)
+			return err
+		}
+		i++
+	}
 	return nil
 }

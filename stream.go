@@ -40,6 +40,20 @@ import (
 //RtmpPusher	我们推流给别人, RtmpPuller	我们拉别人的流
 //RtmpPublisher	别人推流给我们, RtmpPlayer	别人拉我们的流
 
+/*
+AudioCodecType string //国标GB28181中的定义可以知道
+1 MPEG-4视频流	0x10
+2 H.264视频流	0x1B
+  H.265			0x24 ???
+3 SVAC视频流	0x80
+4 G.711音频流	0x90
+5 G.722.1音频流 0x92
+6 G.723.1音频流 0x93
+7 G.729音频流	0x99
+  AAC			0x??
+8 SVAC音频流	0x9B
+*/
+
 //接入流不管什么协议 都以rtmp协议缓存, rtmp协议转出rtmp/flv/hls/gb28181/rtsp
 type Stream struct {
 	Key  string //app_streamid
@@ -78,7 +92,7 @@ type Stream struct {
 	RecvMsgLen          uint32 //用于ACK回应,接收消息的总长度(不包括ChunkHeader)
 	TransmitSwitch      string //
 
-	RtpChan        chan RtpPacket
+	RtpChan        chan *RtpPacket
 	RtpRecChan     chan RtpPacket
 	FrameChan      chan Chunk //每个播放者一个
 	AvPkg2RtspChan chan Chunk
@@ -173,6 +187,7 @@ func NewStream(c net.Conn) (s *Stream, err error) {
 	}
 	s.AvPkg2RtspChan = make(chan Chunk, conf.Rtmp.AvPkt2RtspChanNum)
 	s.PlaybackTimeout = 20
+	s.RtpPktCtTs = -1
 
 	if c != nil {
 		//把c转换为有缓存的io, 调用Flush()才会及时发送数据

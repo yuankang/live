@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"io/ioutil"
 )
 
 /*************************************************/
@@ -164,22 +166,27 @@ func ParseOptTs(s *Stream, r *bytes.Reader, oph *OptPesHeader) int {
 /*************************************************/
 /* pes audio
 /*************************************************/
-func ParseAudio(s *Stream, rp *RtpPacket, r *bytes.Reader) (int, error) {
-	/*
-		d, err := ioutil.ReadAll(r)
-		if err != nil {
-			s.log.Println(err)
-			return 0, err
-		}
-		dlen := len(d)
-		rp.UseNum += uint16(dlen)
-		s.FrameRtp.DataLen = dlen
-		s.FrameRtp.Type = "AudioAacFrame"
-		s.FrameRtp.RecvLen = dlen
-		s.FrameRtp.RtpPkgs = append(s.FrameRtp.RtpPkgs, *rp)
+func ParseAudio(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
+	//var err error
+	var ps PesHeader
+	ps.PacketStartCodePrefix = 0x000001
+	ps.StreamId = 0xc0
 
-		s.log.Printf("Codec:%s, Len=%d, UseNum=%d, Data:%x", s.AudioCodecType, rp.Len, rp.UseNum, d[:10])
-	*/
+	ps.PesPacketLength, _ = ReadUint16(r, 2, BE)
+	psp.UseNum += 2
+	//ps.PesPacketLength 表示音频数据长度时 是准确值
+	s.log.Printf("PesPacketLength=%d", ps.PesPacketLength)
+
+	oph, m := ParseOptPesHeader(s, r)
+	s.log.Printf("%#v", oph)
+	psp.UseNum += m
+
+	//TODO: 这里得到去掉pes头的音频数据 也就是 g711或aac
+	dl := ps.PesPacketLength - uint16(m)
+	_, _ = ReadByte(r, uint32(dl))
+	psp.UseNum += int(dl)
+
+	s.log.Printf("AudioCodec:%s, DataLen:%d", s.AudioCodecType, dl)
 	return 0, nil
 }
 
@@ -205,122 +212,81 @@ func ParseVideoTrailing(s *Stream, r *bytes.Reader, rp *RtpPacket) (int, error) 
 	return 0, nil
 }
 
-func ParseVideo(s *Stream, rp *RtpPacket, r *bytes.Reader) (int, error) {
-	/*
-		var ps PesHeader
-		ps.PacketStartCodePrefix = 0x000001
-		ps.StreamId = 0xe0
+func ParseVideo(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
+	var err error
+	var ps PesHeader
+	ps.PacketStartCodePrefix = 0x000001
+	ps.StreamId = 0xe0
 
-		ps.PesPacketLength, _ = ReadUint16(r, 2, BE)
-		rp.UseNum += 2
-		s.log.Printf("ps.PesPacketLength=%d", ps.PesPacketLength)
+	ps.PesPacketLength, _ = ReadUint16(r, 2, BE)
+	psp.UseNum += 2
+	//ps.PesPacketLength 表示视频数据长度时 不准确或为0 一般不用这个值
+	s.log.Printf("PesPacketLength=%d", ps.PesPacketLength)
 
-		oph, m := ParseOptPesHeader(s, r)
-		rp.UseNum += uint16(m)
-		rp.EsIdx = rp.UseNum
+	oph, m := ParseOptPesHeader(s, r)
+	s.log.Printf("%#v", oph)
+	psp.UseNum += m
 
-		//这里只会处理视频帧的第一个片段, 后续片段在ParseVideoTrailing()中处理
-		//ps.PesPacketLength = 0, 表示视频数据长度不限
-		if ps.PesPacketLength == 0 {
-			d, err := ioutil.ReadAll(r)
-			if err != nil {
-				s.log.Println(err)
-				return 0, err
-			}
-			l := len(d)
-			rp.UseNum += uint16(l)
-			s.FrameRtp.Type = "VideoKeyFrame"
-			s.FrameRtp.RecvLen += l
-			s.FrameRtp.RtpPkgs = append(s.FrameRtp.RtpPkgs, *rp)
-			return 0, nil
-		}
+	switch s.VideoCodecType {
+	case "H264":
+		//_, err = VideoHandlerH264(s, psp, r)
+	case "H265":
+		//_, err = VideoHandlerH265(s, rp, d)
+	}
+	if err != nil {
+		s.log.Println(err)
+		return 0, err
+	}
 
-		//获取pes数据长度
-		PesDataLen := ps.PesPacketLength - 3 - uint16(oph.PesHeaderDataLength)
-		s.FrameRtp.DataLen = int(PesDataLen)
-		//rtp包剩余字节数 = rtp包长度 - 使用rtp字节数
-		RtpRemainLen := rp.Len - rp.UseNum
-
-		//pes数据长度 可能小于, 等于, 大于 rtp包剩余字节数
-		//如果pes数据长度 < rtp剩余字节数, 一般是idr帧 sps+pps+sei+iFrameSeg
-		//如果pes数据长度 = rtp剩余字节数, 一般是碰巧了
-		//如果pes数据长度 > rtp剩余字节数, 媒体数据被分割到多个rtp包了
-		NeedLen := PesDataLen
-		if PesDataLen > RtpRemainLen {
-			NeedLen = RtpRemainLen
-		}
-		s.log.Printf("rp.Len(%d)-rp.UseNum(%d)=%d, PesDataLen=%d, NeedLen=%d", rp.Len, rp.UseNum, RtpRemainLen, PesDataLen, NeedLen)
-
-		d, err := ReadByte(r, uint32(NeedLen))
-		if err != nil {
-			s.log.Println(err)
-			return 0, err
-		}
-		rp.UseNum += uint16(NeedLen)
-
-		switch s.VideoCodecType {
-		case "H264":
-			_, err = VideoHandlerH264(s, rp, d)
-		case "H265":
-			_, err = VideoHandlerH265(s, rp, d)
-		}
-		if err != nil {
-			s.log.Println(err)
-			return 0, err
-		}
-
-		s.log.Printf("%#v, rp.Len=%d, rp.UseNum=%d", ps, rp.Len, rp.UseNum)
-	*/
+	//TODO: 这里得到去掉pes头的视频数据 也就是nalu
+	//TODO: Marker都等于0 用时间戳区分帧的时候, 视频后可能有时间相同的音频数据
+	d, err := ioutil.ReadAll(r)
+	if err != nil {
+		s.log.Println(err)
+		return 0, err
+	}
+	s.log.Printf("VideoCodec:%s, DataLen:%d", s.VideoCodecType, len(d))
 	return 0, nil
 }
 
-func VideoHandlerH264(s *Stream, rp *RtpPacket, d []byte) (int, error) {
-	/*
-		var nh NaluHeader
-		nh.ForbiddenZeroBit = (d[4] >> 7) & 0x1
-		nh.NalRefIdc = (d[4] >> 5) & 0x3
-		nh.NaluType = (d[4] >> 0) & 0x1f
-		s.log.Printf("4byte:%x, %#v", d[:4], nh)
+func VideoHandlerH264(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
+	sc, err := ReadUint32(r, 4, BE)
+	if err != nil {
+		s.log.Println(err)
+		return 0, err
+	}
+	s.log.Printf("nalu StartCode=%x", sc)
+	psp.UseNum += 4
 
-		switch nh.NaluType {
-		case 1: //P帧
-			s.log.Println("NaluType: InterFrame")
-			s.FrameRtp.Type = "VideoInterFrame"
-			s.FrameRtp.RecvLen += len(d)
-			s.FrameRtp.RtpPkgs = append(s.FrameRtp.RtpPkgs, *rp)
-		case 5: //IDR
-			s.log.Println("NaluType: IDR")
-			s.FrameRtp.Type = "VideoKeyFrame"
-			s.FrameRtp.RecvLen += len(d)
-			s.FrameRtp.RtpPkgs = append(s.FrameRtp.RtpPkgs, *rp)
+	d, err := ReadUint8(r)
+	if err != nil {
+		s.log.Println(err)
+		return 0, err
+	}
+	psp.UseNum += 1
 
-			//sps/pps/sei有一个变化就要更新
-			if s.VhcFlag == true {
-				UpdateVideoHeader(s)
-				s.VhcFlag = false
-			}
-		case 6: //SEI
-			s.log.Printf("NaluType:SEI, Len:%d, Data:%x", len(d), d)
-			s.SeiData = d
-		case 7: //SPS
-			s.log.Printf("NaluType:SPS, Len:%d, Data:%x", len(d), d)
-			if bytes.Equal(s.SpsData, d) != true {
-				s.VhcFlag = true
-				s.SpsData = d
-			}
-		case 8: //PPS
-			s.log.Printf("NaluType:PPS, Len:%d, Data:%x", len(d), d)
-			if bytes.Equal(s.PpsData, d) != true {
-				s.VhcFlag = true
-				s.PpsData = d
-			}
-		default:
-			err := fmt.Errorf("NaluType:unknow, %d", nh.NaluType)
-			s.log.Println(err)
-			return 0, err
-		}
-	*/
-	return 0, nil
+	var nh NaluHeader
+	nh.ForbiddenZeroBit = (d >> 7) & 0x1
+	nh.NalRefIdc = (d >> 5) & 0x3
+	nh.NaluType = (d >> 0) & 0x1f
+	s.log.Printf("%#v", nh)
+
+	switch nh.NaluType {
+	case 1: //P帧
+		s.FrameRtp.Type = "VideoInterFrame"
+	case 5: //IDR
+		s.FrameRtp.Type = "VideoKeyFrame"
+	case 6: //SEI
+		s.log.Printf("NaluType:SEI")
+	case 7: //SPS
+		s.log.Printf("NaluType:SPS")
+	case 8: //PPS
+		s.log.Printf("NaluType:PPS")
+	default:
+		err := fmt.Errorf("NaluType:unknow, %d", nh.NaluType)
+		s.log.Println(err)
+	}
+	return 0, err
 }
 
 func VideoHandlerH265(s *Stream, rp *RtpPacket, d []byte) (int, error) {
