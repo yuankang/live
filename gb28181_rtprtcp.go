@@ -250,6 +250,10 @@ func RtpHandler(s *Stream) {
 		s.RtpPktList.PushBack(rp) //从尾部插入, 绝大多数是这种
 		s.RtpPktNeedSeq = rp.SeqNum + 1
 
+		if s.RtpPktCtTs == -1 {
+			s.RtpPktCtTs = int64(rp.Timestamp)
+		}
+
 		//rtp.Mark==1 表示一帧画面的最后一个rtp包到了
 		//TODO: rtp.Ts不相等 表示一帧画面的第一个rtp包到了
 		if rp.Marker == 0 && s.RtpPktCtTs == int64(rp.Timestamp) {
@@ -269,7 +273,7 @@ func RtpHandler(s *Stream) {
 		} else {
 			s.RtpPktCtTs = int64(rp.Timestamp)
 		}
-		s.log.Printf("RtpPktCtTs=%d", s.RtpPktCtTs)
+		s.log.Printf("RtpPktCtTs=%d, rp.Mark=%d, rp.Ts=%d", s.RtpPktCtTs, rp.Marker, rp.Timestamp)
 
 		//TODO: 通过chan发送给rtmp发送程序
 		s.log.Printf("PsPacket Type=%s, Ts=%d, PsPktDataLen=%d", psp.Type, psp.Timestamp, len(psp.Data))
@@ -342,7 +346,7 @@ func RtpReceiverTcp(c net.Conn) {
 
 			s.Conn0 = c
 			s.RemoteAddr = c.RemoteAddr().String()
-			s.RtpChan = make(chan *RtpPacket, 100)
+			s.RtpChan = make(chan *RtpPacket, 1000)
 			//s.RtpRecChan = make(chan RtpPacket, 100)
 			//s.FrameChan = make(chan Frame, 100)
 			s.RtpSeqNeed = rp.SeqNum
@@ -356,18 +360,16 @@ func RtpReceiverTcp(c net.Conn) {
 			s.RtpPktListTailSeq = rp.SeqNum
 			s.RtpPktNeedSeq = rp.SeqNum
 			//s.RtpPktListMutex   sync.Mutex //rtplist锁, 防止插入和删除并发
+			s.RtpPktCtTs = int64(rp.Timestamp)
 
 			//go Gb281812Mem2RtmpServer(s)
-			//go Gb28181Net2RtmpServer(s)
+			go Gb28181Net2RtmpServer(s)
 			go RtpHandler(s)
 			//go RtpRec(s)
 		}
-		if s.RtpPktCtTs == -1 {
-			s.RtpPktCtTs = int64(rp.Timestamp)
-		}
 		//s.log.Printf("RtpLen=%d(0x%x), SeqNum=%d, Pt=%s(%d), Ts=%d, Mark=%d", rp.Len, rp.Len, rp.SeqNum, rp.PtStr, rp.PayloadType, rp.Timestamp, rp.Marker)
 
-		if len(s.RtpChan) < 100 {
+		if len(s.RtpChan) < 1000 {
 			s.RtpChan <- rp
 		} else {
 			s.log.Printf("RtpChanLen=%d", len(s.RtpChan))

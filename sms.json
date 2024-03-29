@@ -1,6 +1,6 @@
 {
-    "IpInner":"127.0.0.1",
-    "IpOuter":"127.0.0.1",
+    "IpInner":"10.66.253.16",
+    "IpOuter":"106.74.27.106",
     "Cpu":{
         "Enable":false,
         "UseNum":1
@@ -40,10 +40,10 @@
         "FixedRtpPort":9020,
         "FixedRtcpPort":9021,
         "RangePortMin":60000,
-        "RangePortMax":61400
+        "RangePortMax":61000
     },
     "Rtsp":{
-        "Port":"2995",
+        "Port":"1554",
         "RtpPortMin":61000,
         "RtpPortMax":62000,
         "Rtp2RtspChanNum":8000,
@@ -56,7 +56,7 @@
         "ReportUrl":"http://www.cc.com:20093/api/stream/proxyStreamState"
     },
     "Rtmp":{
-        "Port":"1945",
+        "Port":"11935",
         "ChunkSize":1024,
         "Msg2RtmpChanNum":200,
         "AvPkt2RtspChanNum":1000,

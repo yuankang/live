@@ -117,6 +117,7 @@ func MessageSplit(s *Stream, c *Chunk, flush bool) error {
 	if m != 0 {
 		n++
 	}
+	s.log.Printf("send times=%d, MsgLen=%d, RmtChunkSize=%d", n, c.MsgLength, s.RemoteChunkSize)
 
 	c.Fmt = 0
 	MsgDataLen := len(c.MsgData)
@@ -250,13 +251,15 @@ func SendCreateStreamMsg(s *Stream) error {
 func SendPublishMsg(s *Stream) error {
 	s.log.Println("<== Send Publish Message")
 
-	PubName := fmt.Sprintf("%s?pbto=30&%s", s.StreamId, BackDoor)
+	//GSPg5ol5nMd2O-n7tt1qe18E?app=slivegateway&pbto=30
+	PubName := fmt.Sprintf("%s?app=slivegateway&pbto=30", s.StreamId)
+	//PubName := fmt.Sprintf("%s?app=slivegateway&pbto=30&%s", s.StreamId, BackDoor)
 	PubType := s.App
 
 	d, _ := AmfMarshal(s, "publish", 3, nil, PubName, PubType)
 	//s.log.Printf("%x", d)
 
-	msg := CreateMessage(MsgTypeIdCmdAmf0, uint32(len(d)), d)
+	msg := CreateMessage(MsgTypeIdDataAmf0, uint32(len(d)), d)
 	msg.Csid = 3
 	msg.MsgStreamId = 0
 	err := MessageSplit(s, &msg, true)

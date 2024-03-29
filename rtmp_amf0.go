@@ -436,6 +436,20 @@ func CreateMessage(TypeId, Len uint32, Data []byte) Chunk {
 	}
 }
 
+func CreateMessage0(TypeId, Len uint32, Data []byte) *Chunk {
+	// fmt: 控制Message Header的类型, 0表示11字节, 1表示7字节, 2表示3字节, 3表示0字节
+	// csid: 0表示2字节形式, 1表示3字节形式, 2用于协议控制消息和命令消息, 3-65599表示块流id
+	return &Chunk{
+		Fmt:         0,
+		Csid:        2,
+		Timestamp:   0,
+		MsgLength:   Len,
+		MsgTypeId:   TypeId,
+		MsgStreamId: 0,
+		MsgData:     Data,
+	}
+}
+
 func AmfConnectHandle(s *Stream, vs []interface{}) error {
 	for _, v := range vs {
 		switch v.(type) {

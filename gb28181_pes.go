@@ -229,7 +229,7 @@ func ParseVideo(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
 
 	switch s.VideoCodecType {
 	case "H264":
-		//_, err = VideoHandlerH264(s, psp, r)
+		_, err = VideoHandlerH264(s, psp, r)
 	case "H265":
 		//_, err = VideoHandlerH265(s, rp, d)
 	}
@@ -246,6 +246,12 @@ func ParseVideo(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
 		return 0, err
 	}
 	s.log.Printf("VideoCodec:%s, DataLen:%d", s.VideoCodecType, len(d))
+
+	if len(s.PsPktChan) < 1000 {
+		s.PsPktChan <- psp
+	} else {
+		s.log.Printf("PsPktChanLen=%d", len(s.PsPktChan))
+	}
 	return 0, nil
 }
 
@@ -255,15 +261,17 @@ func VideoHandlerH264(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
 		s.log.Println(err)
 		return 0, err
 	}
-	s.log.Printf("nalu StartCode=%x", sc)
-	psp.UseNum += 4
+	s.log.Printf("nalu StartCode=%#08x", sc)
+	//psp.UseNum += 4
 
 	d, err := ReadUint8(r)
 	if err != nil {
 		s.log.Println(err)
 		return 0, err
 	}
-	psp.UseNum += 1
+	//psp.UseNum += 1
+
+	//psp.Type = GetNaluType(d, "h264")
 
 	var nh NaluHeader
 	nh.ForbiddenZeroBit = (d >> 7) & 0x1
@@ -273,14 +281,19 @@ func VideoHandlerH264(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
 
 	switch nh.NaluType {
 	case 1: //P帧
+		psp.Type = "VideoInterFrame"
 		s.FrameRtp.Type = "VideoInterFrame"
 	case 5: //IDR
+		psp.Type = "VideoKeyFrame"
 		s.FrameRtp.Type = "VideoKeyFrame"
 	case 6: //SEI
+		psp.Type = "NaluType:SEI"
 		s.log.Printf("NaluType:SEI")
 	case 7: //SPS
+		psp.Type = "NaluType:SPS"
 		s.log.Printf("NaluType:SPS")
 	case 8: //PPS
+		psp.Type = "NaluType:PPS"
 		s.log.Printf("NaluType:PPS")
 	default:
 		err := fmt.Errorf("NaluType:unknow, %d", nh.NaluType)

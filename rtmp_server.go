@@ -357,10 +357,15 @@ func RtmpReceiver(s *Stream) error {
 }
 
 type RtmpPublisher struct {
-	VpsData []byte //在???
-	SpsData []byte //在AVCDecoderConfigurationRecord
-	PpsData []byte //在AVCDecoderConfigurationRecord
-	SeiData []byte //nalu(sei)+nalu(iframe), sei可以不发给sv
+	VpsData   []byte //在???
+	SpsData   []byte //在AVCDecoderConfigurationRecord
+	PpsData   []byte //在AVCDecoderConfigurationRecord
+	SeiData   []byte //nalu(sei)+nalu(iframe), sei可以不发给sv
+	VpsChange bool
+	SpsChange bool
+	PpsChange bool
+	SeiChange bool
+	AvcSH     []byte // video sequence header
 
 	GopCache
 	FrameNum int

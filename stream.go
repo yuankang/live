@@ -92,6 +92,7 @@ type Stream struct {
 	RecvMsgLen          uint32 //用于ACK回应,接收消息的总长度(不包括ChunkHeader)
 	TransmitSwitch      string //
 
+	PsPktChan      chan *PsPacket
 	RtpChan        chan *RtpPacket
 	RtpRecChan     chan RtpPacket
 	FrameChan      chan Chunk //每个播放者一个
@@ -182,6 +183,7 @@ func NewStream(c net.Conn) (s *Stream, err error) {
 		Msg2RtmpChan:        make(chan Chunk, conf.Rtmp.Msg2RtmpChanNum),
 		HlsChan:             make(chan Chunk, conf.HlsRec.HlsStockMax),
 		HlsLiveChan:         make(chan Chunk, conf.HlsRec.HlsStockMax),
+		PsPktChan:           make(chan *PsPacket, 1000),
 		GopCache:            GopCacheNew(),
 		MediaData:           list.New(),
 	}

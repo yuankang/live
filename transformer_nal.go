@@ -6,8 +6,8 @@ import (
 	"math"
 )
 
-// 去除防竞争码 检测到 00 00 03 要抛弃03
-// 数据结尾是 0x000003时, 0x03不应该被去掉
+//去除防竞争码 检测到 00 00 03 要抛弃03
+//数据结尾是 0x000003时, 0x03不应该被去掉
 func PreventionCodeWipe(data []byte) []byte {
 	l := len(data)
 	if l < 3 {
@@ -50,12 +50,54 @@ startCode(4字节)	0x00000001
 2023/04/06 16:48:25 2, main.NaluInfo{ByteNum:3, BytePos:14, ByteLen:0}
 2023/04/06 16:48:25 14
 */
+//Type    string //vps/sps/pps/sei/ifrm/pfrm
 type NaluInfo struct {
+	Type    string //vps/sps/pps/sei/ifrm/pfrm
+	Data    []byte
 	ByteNum int //3表示0x000001, 4表示0x00000001
 	BytePos int //0x00000001 左边第一个00的下标
 	ByteLen int //0x00000001 后面的数据长度
 }
 
+//只找0x00000001
+func FindAnnexbStartCode1(d []byte) ([]*NaluInfo, error) {
+	var err error
+	l := len(d)
+	if l < 5 {
+		err = fmt.Errorf("DataLen Must >= 4, data:0x%x", d)
+		return nil, err
+	}
+
+	var nis []*NaluInfo
+	for i := 0; i < l-3; i++ {
+		if d[i] == 0x00 && d[i+1] == 0x00 && d[i+2] == 0x00 && d[i+3] == 0x01 {
+			ni := &NaluInfo{}
+			ni.BytePos = i
+			ni.ByteNum = 4
+			ni.Type = GetNaluType(d[i+4:i+5], "h264")
+
+			nis = append(nis, ni)
+		}
+	}
+
+	var s, e int
+	niNum := len(nis)
+	for i := 0; i < niNum; i++ {
+		if i+1 == niNum {
+			nis[i].ByteLen = l - nis[i].BytePos - nis[i].ByteNum
+		} else {
+			nis[i].ByteLen = nis[i+1].BytePos - nis[i].BytePos - nis[i].ByteNum
+		}
+		s = nis[i].BytePos + 4
+		e = s + nis[i].ByteLen
+		//log.Printf("nalu %s, start=%d, end=%d", nis[i].Type, s, e)
+		nis[i].Data = d[s:e]
+		//log.Printf("Type=%s, Data=%x", nis[i].Type, nis[i].Data[:4])
+	}
+	return nis, nil
+}
+
+//找0x00000001 或 0x000001
 func FindAnnexbStartCode(d []byte) ([]NaluInfo, int) {
 	l := len(d)
 	if l < 3 {
@@ -95,6 +137,31 @@ func FindAnnexbStartCode(d []byte) ([]NaluInfo, int) {
 		fl += niNum * 4
 	}
 	return nis, fl
+}
+
+//fmt h264/h265
+func GetNaluType(d []byte, fmt string) string {
+	var nh NaluHeader
+	nh.ForbiddenZeroBit = (d[0] >> 7) & 0x1
+	nh.NalRefIdc = (d[0] >> 5) & 0x3
+	nh.NaluType = (d[0] >> 0) & 0x1f
+	//log.Printf("%#v", nh)
+
+	switch nh.NaluType {
+	case 1: //P帧
+		return "pfrm"
+	case 5: //IDR
+		return "ifrm"
+	case 6: //SEI
+		return "sei"
+	case 7: //SPS
+		return "sps"
+	case 8: //PPS
+		return "pps"
+	default:
+		return "unknow"
+	}
+	return "unknow"
 }
 
 func Annexb2Avcc(data []byte, nis []NaluInfo, fl int) []byte {
@@ -676,7 +743,7 @@ func SpsParse0(s *Stream, data []byte) (*Sps, error) {
 	var sBit uint
 	sps.SeqParameterSetId, err = GolombDecodeUev(d[4:], &sBit)
 	if err != nil {
-		log.Println(err)
+		s.log.Println(err)
 		return nil, err
 	}
 
@@ -685,36 +752,36 @@ func SpsParse0(s *Stream, data []byte) (*Sps, error) {
 	case 100, 110, 122, 244, 44, 83, 86, 118, 128, 138, 139, 134, 135:
 		ChromaFormatIdc, err := GolombDecodeUev(d[4:], &sBit)
 		if err != nil {
-			log.Println(err)
+			s.log.Println(err)
 			return nil, err
 		}
 		if ChromaFormatIdc == 3 {
 			_, err = ReadBit2Uint(d[4:], &sBit, 1) //SeparateColourPlaneFlag
 			if err != nil {
-				log.Println(err)
+				s.log.Println(err)
 				return nil, err
 			}
 			nn = 12
 		}
 		_, err = GolombDecodeUev(d[4:], &sBit) //bit_depth_luma_minus8
 		if err != nil {
-			log.Println(err)
+			s.log.Println(err)
 			return nil, err
 		}
 		_, err = GolombDecodeUev(d[4:], &sBit) //bit_depth_chroma_minus8
 		if err != nil {
-			log.Println(err)
+			s.log.Println(err)
 			return nil, err
 		}
 		_, err = ReadBit2Uint(d[4:], &sBit, 1) //qpprime_y_zero_transform_bypass_flag
 		if err != nil {
-			log.Println(err)
+			s.log.Println(err)
 			return nil, err
 		}
 
 		SeqScalingMatrixPresentFlag, err := ReadBit2Uint(d[4:], &sBit, 1)
 		if err != nil {
-			log.Println(err)
+			s.log.Println(err)
 			return nil, err
 		}
 
@@ -723,7 +790,7 @@ func SpsParse0(s *Stream, data []byte) (*Sps, error) {
 				//seq_scaling_list_present_flag[i]
 				SeqScalingListPresentFlag, err := ReadBit2Uint(d[4:], &sBit, 1)
 				if err != nil {
-					log.Println(err)
+					s.log.Println(err)
 					return nil, err
 				}
 				if SeqScalingListPresentFlag == 1 {
@@ -739,45 +806,45 @@ func SpsParse0(s *Stream, data []byte) (*Sps, error) {
 
 	sps.Log2MaxFrameNumMinus4, err = GolombDecodeUev(d[4:], &sBit)
 	if err != nil {
-		log.Println(err)
+		s.log.Println(err)
 		return nil, err
 	}
 	sps.PicOrderCntType, err = GolombDecodeUev(d[4:], &sBit)
 	if err != nil {
-		log.Println(err)
+		s.log.Println(err)
 		return nil, err
 	}
 	if sps.PicOrderCntType == 0 {
 		_, err = GolombDecodeUev(d[4:], &sBit) //log2_max_pic_order_cnt_lsb_minus4
 		if err != nil {
-			log.Println(err)
+			s.log.Println(err)
 			return nil, err
 		}
 	} else if sps.PicOrderCntType == 1 {
 		_, err = ReadBit2Uint(d[4:], &sBit, 1) //delta_pic_order_always_zero_flag
 		if err != nil {
-			log.Println(err)
+			s.log.Println(err)
 			return nil, err
 		}
 		_, err = GolombDecodeSev(d[4:], &sBit) //offset_for_non_ref_pic
 		if err != nil {
-			log.Println(err)
+			s.log.Println(err)
 			return nil, err
 		}
 		_, err = GolombDecodeSev(d[4:], &sBit) //offset_for_top_to_bottom_field
 		if err != nil {
-			log.Println(err)
+			s.log.Println(err)
 			return nil, err
 		}
 		NumRefFramesInPicOrderCntCycle, err := GolombDecodeUev(d[4:], &sBit)
 		if err != nil {
-			log.Println(err)
+			s.log.Println(err)
 			return nil, err
 		}
 		for i := uint(0); i < NumRefFramesInPicOrderCntCycle; i++ {
 			_, err = GolombDecodeSev(d[4:], &sBit) //offset_for_ref_frame[i]
 			if err != nil {
-				log.Println(err)
+				s.log.Println(err)
 				return nil, err
 			}
 		}
@@ -785,29 +852,29 @@ func SpsParse0(s *Stream, data []byte) (*Sps, error) {
 
 	sps.MaxNumRefFrames, err = GolombDecodeUev(d[4:], &sBit)
 	if err != nil {
-		log.Println(err)
+		s.log.Println(err)
 		return nil, err
 	}
 	sps.GapsInFrameNumValueAllowedFlag, err = ReadBit2Uint(d[4:], &sBit, 1)
 	if err != nil {
-		log.Println(err)
+		s.log.Println(err)
 		return nil, err
 	}
 
 	sps.PicWidthInMbsMinus1, err = GolombDecodeUev(d[4:], &sBit)
 	if err != nil {
-		log.Println(err)
+		s.log.Println(err)
 		return nil, err
 	}
 	sps.PicHeightInMapUnitsMinus1, err = GolombDecodeUev(d[4:], &sBit)
 	if err != nil {
-		log.Println(err)
+		s.log.Println(err)
 		return nil, err
 	}
 
 	sps.FrameMbsOnlyFlag, err = ReadBit2Uint(d[4:], &sBit, 1)
 	if err != nil {
-		log.Println(err)
+		s.log.Println(err)
 		return nil, err
 	}
 	if sps.FrameMbsOnlyFlag == 0 {
@@ -816,45 +883,45 @@ func SpsParse0(s *Stream, data []byte) (*Sps, error) {
 		//该值=1 表示本序列中的图像如果不是场模式就是帧场自适应模式
 		_, err = ReadBit2Uint(d[4:], &sBit, 1) //mb_adaptive_frame_field_flag
 		if err != nil {
-			log.Println(err)
+			s.log.Println(err)
 			return nil, err
 		}
 	}
 	sps.Direct8x8InferenceFlag, err = ReadBit2Uint(d[4:], &sBit, 1)
 	if err != nil {
-		log.Println(err)
+		s.log.Println(err)
 		return nil, err
 	}
 	sps.FrameCroppingFlag, err = ReadBit2Uint(d[4:], &sBit, 1)
 	if err != nil {
-		log.Println(err)
+		s.log.Println(err)
 		return nil, err
 	}
 	if sps.FrameCroppingFlag == 1 {
 		_, err = GolombDecodeUev(d[4:], &sBit)
 		if err != nil {
-			log.Println(err)
+			s.log.Println(err)
 			return nil, err
 		}
 		_, err = GolombDecodeUev(d[4:], &sBit)
 		if err != nil {
-			log.Println(err)
+			s.log.Println(err)
 			return nil, err
 		}
 		_, err = GolombDecodeUev(d[4:], &sBit)
 		if err != nil {
-			log.Println(err)
+			s.log.Println(err)
 			return nil, err
 		}
 		_, err = GolombDecodeUev(d[4:], &sBit)
 		if err != nil {
-			log.Println(err)
+			s.log.Println(err)
 			return nil, err
 		}
 	}
 	sps.VuiParametersPresentFlag, err = ReadBit2Uint(d[4:], &sBit, 1)
 	if err != nil {
-		log.Println(err)
+		s.log.Println(err)
 		return nil, err
 	}
 	// var vp VuiParameters, 有fps

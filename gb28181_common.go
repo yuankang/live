@@ -17,6 +17,7 @@ func NewGb28181Stream(key string, rqst GbRqst) (*Stream, error) {
 	s.Key = key
 	s.Type = "GbPub"
 	s.GbRqst = rqst
+	s.PsPktChan = make(chan *PsPacket, 1000)
 
 	s.LogFn = fmt.Sprintf("%s/%s/GbPub_%s.log", conf.Log.StreamLogPath, rqst.StreamId, utils.GetYMD())
 	s.log, s.LogFp, _ = StreamLogCreate(s.LogFn)

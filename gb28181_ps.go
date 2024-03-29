@@ -204,10 +204,12 @@ type PgmStreamMap struct {
 }
 
 //StreamType 详见 ISO_IEC_13818-01_2007, Table 2-34, P60
-//0x1B	H.264 视频流
+//0x1B  H.264 视频流
 //0x24  H.265 视频流, ISO/IEC 13818-1:2018 增加了这个
-//0x??  AAC 音频流
-//0x90	G.711 音频流
+//0x0F  AAC 音频流
+//0x83	PCM未压缩的音频流, G.711a/G.711u是PCM编码变种
+//0x90	G.711a 音频流
+//0x91	G.711u 音频流
 //0x92	G.722.1 音频流
 //0x93	G.723.1 音频流
 //0x99	G.729 音频流
@@ -289,10 +291,14 @@ func ParsePgmStreamInfo(s *Stream, r *bytes.Reader) int {
 	}
 	if sm.ElementaryStreamId == 0xc0 {
 		switch sm.StreamType {
-		case 0x1b: //???需确认
+		case 0x0f:
 			s.AudioCodecType = "AAC"
+		case 0x83:
+			s.AudioCodecType = "PCM"
 		case 0x90:
 			s.AudioCodecType = "G711a"
+		case 0x91:
+			s.AudioCodecType = "G711u"
 		default:
 			s.log.Printf("AudioFormat=%x, unknow", sm.StreamType)
 		}
