@@ -9,6 +9,8 @@ import (
 /*************************************************/
 /* ParsePsHeader
 /*************************************************/
+//VideoKeyFrame, VideoInterFrame
+//AudioG711a, AudioG711u, AudioAac
 type PsPacket struct {
 	Type      string
 	Timestamp uint32
@@ -437,9 +439,11 @@ func ParsePs(s *Stream, psp *PsPacket) error {
 		case 0x000001bc:
 			_, err = ParsePgmStreamMap(s, psp, r)
 		case 0x000001c0:
+			psp.Type = "Audio"
 			_, err = ParseAudio(s, psp, r)
 			//s.log.Printf("AudioData:%x", psp.Data[psp.UseNum:])
 		case 0x000001e0:
+			psp.Type = "Video"
 			_, err = ParseVideo(s, psp, r)
 			//s.log.Printf("VideoData:%x", psp.Data[psp.UseNum:])
 		default:

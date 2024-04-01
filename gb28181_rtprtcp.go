@@ -275,7 +275,7 @@ func RtpHandler(s *Stream) {
 		}
 		s.log.Printf("RtpPktCtTs=%d, rp.Mark=%d, rp.Ts=%d", s.RtpPktCtTs, rp.Marker, rp.Timestamp)
 
-		//TODO: 通过chan发送给rtmp发送程序
+		//通过chan发送给rtmp发送程序
 		s.log.Printf("PsPacket Type=%s, Ts=%d, PsPktDataLen=%d", psp.Type, psp.Timestamp, len(psp.Data))
 		err = ParsePs(s, psp)
 		if err != nil {

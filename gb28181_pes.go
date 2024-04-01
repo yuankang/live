@@ -181,12 +181,30 @@ func ParseAudio(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
 	s.log.Printf("%#v", oph)
 	psp.UseNum += m
 
-	//TODO: 这里得到去掉pes头的音频数据 也就是 g711或aac
+	//这里得到去掉pes头的音频数据 也就是 g711或aac
 	dl := ps.PesPacketLength - uint16(m)
-	_, _ = ReadByte(r, uint32(dl))
-	psp.UseNum += int(dl)
+	d, err := ReadByte(r, uint32(dl))
+	if err != nil {
+		s.log.Println(err)
+		return 0, err
+	}
+	//psp.UseNum += int(dl)
+	s.log.Printf("AudioCodec:%s, DataLen:%d", s.AudioCodecType, len(d))
 
-	s.log.Printf("AudioCodec:%s, DataLen:%d", s.AudioCodecType, dl)
+	switch s.AudioCodecType {
+	case "G711a":
+		//_, err = AudioHandlerG711a(s, psp, r)
+	case "G711u":
+		//_, err = AudioHandlerG711u(s, psp, r)
+	case "AAC":
+		//_, err = AudioHandlerAac(s, psp, r)
+	}
+
+	if len(s.PsPktChan) < 1000 {
+		s.PsPktChan <- psp
+	} else {
+		s.log.Printf("PsPktChanLen=%d", len(s.PsPktChan))
+	}
 	return 0, nil
 }
 
@@ -287,13 +305,13 @@ func VideoHandlerH264(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
 		psp.Type = "VideoKeyFrame"
 		s.FrameRtp.Type = "VideoKeyFrame"
 	case 6: //SEI
-		psp.Type = "NaluType:SEI"
+		psp.Type = "VideoKeyFrame"
 		s.log.Printf("NaluType:SEI")
 	case 7: //SPS
-		psp.Type = "NaluType:SPS"
+		psp.Type = "VideoKeyFrame"
 		s.log.Printf("NaluType:SPS")
 	case 8: //PPS
-		psp.Type = "NaluType:PPS"
+		psp.Type = "VideoKeyFrame"
 		s.log.Printf("NaluType:PPS")
 	default:
 		err := fmt.Errorf("NaluType:unknow, %d", nh.NaluType)
