@@ -40,7 +40,10 @@
         "FixedRtpPort":9020,
         "FixedRtcpPort":9021,
         "RangePortMin":60000,
-        "RangePortMax":61000
+        "RangePortMax":61000,
+        "RtpPktChanNum":1000,
+        "RtcpPktChanNum":100,
+        "PsPktChanNum":1000
     },
     "Rtsp":{
         "Port":"1554",

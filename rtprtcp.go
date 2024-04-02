@@ -479,7 +479,6 @@ type RtpPacket struct {
 	Data   []byte //RtpHeader+RtpData
 	Len    uint16 //2字节, Data长度, 最大为0xffff=65535
 	UseNum uint16 //已经使用的Data字节数
-	EsIdx  uint16 //EsData在Data里的下标
 }
 
 //StreamId_20230225124550_rtp.rec

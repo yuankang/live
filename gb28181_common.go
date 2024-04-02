@@ -17,7 +17,6 @@ func NewGb28181Stream(key string, rqst GbRqst) (*Stream, error) {
 	s.Key = key
 	s.Type = "GbPub"
 	s.GbRqst = rqst
-	s.PsPktChan = make(chan *PsPacket, 1000)
 
 	s.LogFn = fmt.Sprintf("%s/%s/GbPub_%s.log", conf.Log.StreamLogPath, rqst.StreamId, utils.GetYMD())
 	s.log, s.LogFp, _ = StreamLogCreate(s.LogFn)
@@ -69,7 +68,7 @@ type GbPub struct {
 	RtpPktListTailSeq uint16     //rtplist尾节点的rtpseq值
 	RtpPktListMutex   sync.Mutex //rtplist锁, 防止插入和删除并发
 	RtpPktNeedSeq     uint16     //下一个rtp包的seq
-	RtpPktCtTs        int64      //帧的第一个rtp包的时间戳 CurrentTimestamp
+	RtpPktCrtTs       int64      //帧的第一个rtp包的时间戳 CurrentTimestamp
 
 	RtpSeqNeed  uint16   //期待的rtp包序号
 	RtpSeqWait  uint16   //期待的rtp包序号, 等了多少次

@@ -93,7 +93,7 @@ type Stream struct {
 	TransmitSwitch      string //
 
 	PsPktChan      chan *PsPacket
-	RtpChan        chan *RtpPacket
+	RtpPktChan     chan *RtpPacket
 	RtpRecChan     chan RtpPacket
 	FrameChan      chan Chunk //每个播放者一个
 	AvPkg2RtspChan chan Chunk
@@ -189,7 +189,7 @@ func NewStream(c net.Conn) (s *Stream, err error) {
 	}
 	s.AvPkg2RtspChan = make(chan Chunk, conf.Rtmp.AvPkt2RtspChanNum)
 	s.PlaybackTimeout = 20
-	s.RtpPktCtTs = -1
+	s.RtpPktCrtTs = -1
 
 	if c != nil {
 		//把c转换为有缓存的io, 调用Flush()才会及时发送数据

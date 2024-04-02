@@ -175,7 +175,7 @@ func VideoHandler(s, sm *Stream, p *PsPacket) error {
 	var ck *Chunk
 	var d []byte
 
-	nis, err := FindAnnexbStartCode1(p.Data[p.UseNum:])
+	nis, err := FindAnnexbStartCode1(p.Data)
 	if err != nil {
 		sm.log.Println(err)
 		return err
@@ -286,7 +286,7 @@ func VideoHandler(s, sm *Stream, p *PsPacket) error {
 	return nil
 }
 
-func Gb28181Net2RtmpServer(s *Stream) {
+func GbNetPushRtmp(s *Stream) {
 	sm, err := RtmpConn(s)
 	if err != nil {
 		s.log.Println(err)
@@ -305,16 +305,23 @@ func Gb28181Net2RtmpServer(s *Stream) {
 	for {
 		p, ok = <-s.PsPktChan
 		if ok == false {
-			sm.log.Printf("%s, Gb28181Net2RtmpServer() stop", sm.StreamId)
+			sm.log.Printf("%s, GbNetPushRtmp() stop", sm.StreamId)
 			break
 		}
-		sm.log.Printf("PsType=%s, PsTs=%d, PsData=%x", p.Type, p.Timestamp, p.Data[p.UseNum:p.UseNum+50])
+		if p.Type == "Audio" {
+			sm.log.Printf("PsType=%s, PsTs=%d, PsData=%x", p.Type, p.Timestamp, p.Data[:])
+		} else {
+			sm.log.Printf("PsType=%s, PsTs=%d, PsData=%x", p.Type, p.Timestamp, p.Data[:100])
+		}
 
 		switch p.Type {
-		case "VideoKeyFrame", "VideoInterFrame":
+		case "Video":
 			err = VideoHandler(s, sm, p)
 		case "Audio":
 			err = AudioHandler(s, sm, p)
+		}
+		if err != nil {
+			sm.log.Println(err)
 		}
 	}
 }

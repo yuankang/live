@@ -98,6 +98,7 @@ func ParseOptPesHeader(s *Stream, r *bytes.Reader) (*OptPesHeader, int) {
 	if oph.PtsDtsFlags == 0x2 || oph.PtsDtsFlags == 0x3 {
 		m = ParseOptTs(s, r, &oph)
 	}
+	//TODO 如果出现一定要处理 否则从r中读数据会错位
 	if oph.EscrFlag == 0x1 {
 		s.log.Println("need todo something")
 	}
@@ -117,9 +118,10 @@ func ParseOptPesHeader(s *Stream, r *bytes.Reader) (*OptPesHeader, int) {
 		s.log.Println("need todo something")
 	}
 
-	padLen := int(oph.PesHeaderDataLength) - m
-	d, _ := ReadByte(r, uint32(padLen))
-	s.log.Printf("PesPadData:%x, len=%d", d, padLen)
+	pl := int(oph.PesHeaderDataLength) - m
+	_, _ = ReadByte(r, uint32(pl))
+	//d, _ := ReadByte(r, uint32(pl))
+	//s.log.Printf("PesPadData:%x, len=%d", d, pl)
 	return &oph, n
 }
 
@@ -141,7 +143,7 @@ func ParseOptTs(s *Stream, r *bytes.Reader, oph *OptPesHeader) int {
 	n += 2
 	oPts.Ts14_0 = (b16 >> 1) & 0x7fff
 	oPts.MarkerBit2 = uint8((b16 >> 0) & 0x1)
-	s.log.Printf("oPts=%#v, rLen=%d", oPts, n)
+	//s.log.Printf("oPts=%#v, rLen=%d", oPts, n)
 
 	if oph.PtsDtsFlags == 0x3 {
 		b8, _ := ReadUint8(r)
@@ -159,53 +161,41 @@ func ParseOptTs(s *Stream, r *bytes.Reader, oph *OptPesHeader) int {
 		oDts.MarkerBit2 = uint8((b16 >> 0) & 0x1)
 		s.log.Printf("oDts=%#v, rLen=%d", oDts, n)
 	}
-
 	return n
 }
 
 /*************************************************/
 /* pes audio
 /*************************************************/
-func ParseAudio(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
-	//var err error
-	var ps PesHeader
-	ps.PacketStartCodePrefix = 0x000001
-	ps.StreamId = 0xc0
+func ParseAudio(s *Stream, pps *PsPacket, r *bytes.Reader) (*PsPacket, error) {
+	var err error
+	var ph PesHeader
+	ph.PacketStartCodePrefix = 0x000001
+	ph.StreamId = 0xc0
 
-	ps.PesPacketLength, _ = ReadUint16(r, 2, BE)
-	psp.UseNum += 2
-	//ps.PesPacketLength 表示音频数据长度时 是准确值
-	s.log.Printf("PesPacketLength=%d", ps.PesPacketLength)
+	ph.PesPacketLength, _ = ReadUint16(r, 2, BE)
+	pps.UseNum += 2
+	//ph.PesPacketLength 表示音频数据长度时 是准确值
+	s.log.Printf("PesPacketLength=%d, Audio", ph.PesPacketLength)
 
-	oph, m := ParseOptPesHeader(s, r)
+	oph, l := ParseOptPesHeader(s, r)
 	s.log.Printf("%#v", oph)
-	psp.UseNum += m
+	pps.UseNum += l
 
-	//这里得到去掉pes头的音频数据 也就是 g711或aac
-	dl := ps.PesPacketLength - uint16(m)
-	d, err := ReadByte(r, uint32(dl))
+	pp := &PsPacket{}
+	pp.Type = "Audio"
+	pp.Timestamp = pps.Timestamp
+
+	//这里获得去掉pes头的音频数据 也就是 g711或aac
+	dl := ph.PesPacketLength - uint16(l)
+	pp.Data, err = ReadByte(r, uint32(dl))
 	if err != nil {
 		s.log.Println(err)
-		return 0, err
+		return nil, err
 	}
-	//psp.UseNum += int(dl)
-	s.log.Printf("AudioCodec:%s, DataLen:%d", s.AudioCodecType, len(d))
-
-	switch s.AudioCodecType {
-	case "G711a":
-		//_, err = AudioHandlerG711a(s, psp, r)
-	case "G711u":
-		//_, err = AudioHandlerG711u(s, psp, r)
-	case "AAC":
-		//_, err = AudioHandlerAac(s, psp, r)
-	}
-
-	if len(s.PsPktChan) < 1000 {
-		s.PsPktChan <- psp
-	} else {
-		s.log.Printf("PsPktChanLen=%d", len(s.PsPktChan))
-	}
-	return 0, nil
+	pps.UseNum += int(dl)
+	s.log.Printf("AudioCodec:%s, DataLen:%d", s.AudioCodecType, len(pp.Data))
+	return pp, nil
 }
 
 /*************************************************/
@@ -230,47 +220,35 @@ func ParseVideoTrailing(s *Stream, r *bytes.Reader, rp *RtpPacket) (int, error) 
 	return 0, nil
 }
 
-func ParseVideo(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
+func ParseVideo(s *Stream, pps *PsPacket, r *bytes.Reader) (*PsPacket, error) {
 	var err error
-	var ps PesHeader
-	ps.PacketStartCodePrefix = 0x000001
-	ps.StreamId = 0xe0
+	var ph PesHeader
+	ph.PacketStartCodePrefix = 0x000001
+	ph.StreamId = 0xe0
 
-	ps.PesPacketLength, _ = ReadUint16(r, 2, BE)
-	psp.UseNum += 2
-	//ps.PesPacketLength 表示视频数据长度时 不准确或为0 一般不用这个值
-	s.log.Printf("PesPacketLength=%d", ps.PesPacketLength)
+	ph.PesPacketLength, _ = ReadUint16(r, 2, BE)
+	pps.UseNum += 2
+	//ph.PesPacketLength 表示视频数据长度时 不准确或为0 一般不用这个值
+	s.log.Printf("PesPacketLength=%d, Video", ph.PesPacketLength)
 
-	oph, m := ParseOptPesHeader(s, r)
+	oph, l := ParseOptPesHeader(s, r)
 	s.log.Printf("%#v", oph)
-	psp.UseNum += m
+	pps.UseNum += l
 
-	switch s.VideoCodecType {
-	case "H264":
-		_, err = VideoHandlerH264(s, psp, r)
-	case "H265":
-		//_, err = VideoHandlerH265(s, rp, d)
-	}
+	pp := &PsPacket{}
+	pp.Type = "Video"
+	pp.Timestamp = pps.Timestamp
+
+	//这里获得去掉pes头的视频数据 也就是nalu
+	//FIXME: Marker=0用时间戳区分帧时, 视频后可能有时间相同的音频数据
+	pp.Data, err = ioutil.ReadAll(r)
 	if err != nil {
 		s.log.Println(err)
-		return 0, err
+		return nil, err
 	}
-
-	//TODO: 这里得到去掉pes头的视频数据 也就是nalu
-	//TODO: Marker都等于0 用时间戳区分帧的时候, 视频后可能有时间相同的音频数据
-	d, err := ioutil.ReadAll(r)
-	if err != nil {
-		s.log.Println(err)
-		return 0, err
-	}
-	s.log.Printf("VideoCodec:%s, DataLen:%d", s.VideoCodecType, len(d))
-
-	if len(s.PsPktChan) < 1000 {
-		s.PsPktChan <- psp
-	} else {
-		s.log.Printf("PsPktChanLen=%d", len(s.PsPktChan))
-	}
-	return 0, nil
+	pps.UseNum += len(pp.Data)
+	s.log.Printf("VideoCodec:%s, DataLen:%d", s.VideoCodecType, len(pp.Data))
+	return pp, nil
 }
 
 func VideoHandlerH264(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
@@ -320,8 +298,61 @@ func VideoHandlerH264(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
 	return 0, err
 }
 
-func VideoHandlerH265(s *Stream, rp *RtpPacket, d []byte) (int, error) {
-	return 0, nil
+func VideoHandlerH265(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
+	sc, err := ReadUint32(r, 4, BE)
+	if err != nil {
+		s.log.Println(err)
+		return 0, err
+	}
+	s.log.Printf("nalu StartCode=%#08x", sc)
+	//psp.UseNum += 4
+
+	d, err := ReadByte(r, 2)
+	if err != nil {
+		s.log.Println(err)
+		return 0, err
+	}
+	//psp.UseNum += 2
+
+	//psp.Type = GetNaluType(d, "h264")
+
+	var nh NaluHeaderH265
+	nh.ForbiddenZeroBit = d[0] >> 7
+	nh.NalUnitType = (d[0] >> 1) & 0x3f
+	nh.NuhLayerId = ((d[0] & 0x1) << 5) | (d[1]>>3)&0x1f
+	nh.NuhTemporalIdPlus1 = d[1] & 0x7
+	s.log.Printf("%#v", nh)
+
+	switch nh.NalUnitType {
+	case 1: //P帧
+		psp.Type = "VideoInterFrame"
+		s.FrameRtp.Type = "VideoInterFrame"
+	case 19: //IDR
+		psp.Type = "VideoKeyFrame"
+		s.FrameRtp.Type = "VideoKeyFrame"
+	case 32: //VPS
+		psp.Type = "VideoKeyFrame"
+		s.log.Printf("NaluType:VPS")
+	case 33: //SPS
+		psp.Type = "VideoKeyFrame"
+		s.log.Printf("NaluType:SPS")
+	case 34: //PPS
+		psp.Type = "VideoKeyFrame"
+		s.log.Printf("NaluType:PPS")
+	case 35: //AUD
+		psp.Type = "VideoKeyFrame"
+		s.log.Printf("NaluType:AUD")
+	case 39: //PREFIX_SEI_NUT
+		psp.Type = "VideoKeyFrame"
+		s.log.Printf("NaluType:SEI")
+	case 40: //SUFFIX_SEI_NUT
+		psp.Type = "VideoKeyFrame"
+		s.log.Printf("NaluType:SEI")
+	default:
+		err := fmt.Errorf("NaluType:unknow, %d", nh.NalUnitType)
+		s.log.Println(err)
+	}
+	return 0, err
 }
 
 /*************************************************/

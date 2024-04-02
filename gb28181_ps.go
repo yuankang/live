@@ -38,7 +38,7 @@ type PsHeader struct {
 	StuffingByte       []byte //8bit,  填充字节 0xff
 }
 
-func ParsePsHeader(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
+func ParsePsHeader(s *Stream, pps *PsPacket, r *bytes.Reader) (int, error) {
 	var ph PsHeader
 	var n int
 
@@ -100,8 +100,8 @@ func ParsePsHeader(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
 	}
 	n += int(ph.PackStuffingLength)
 
-	s.log.Printf("%#v, rLen=%d", ph, n)
-	psp.UseNum += n
+	//s.log.Printf("%#v, rLen=%d", ph, n)
+	pps.UseNum += n
 	return n, nil
 }
 
@@ -139,7 +139,7 @@ type PsSysBound struct {
 	PStdBufferSizeBound  uint16 //13bit, 缓冲区大小界限, 若P-STD_buffer_bound_scale的值为'0'，则该字段以128字节为单位来度量缓冲区大小的边界。若P-STD_buffer_bound_scale的值为'1'，则该字段以1024字节为单位来度量缓冲区大小的边界。
 }
 
-func ParsePsSysHeader(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
+func ParsePsSysHeader(s *Stream, pps *PsPacket, r *bytes.Reader) (int, error) {
 	var psh PsSystemHeader
 	var n int
 
@@ -167,9 +167,10 @@ func ParsePsSysHeader(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
 
 	//PsSysBound []PsSysBound //目前没啥用
 	dl := psh.HeaderLength - 6
-	d, _ := ReadByte(r, uint32(dl))
+	_, _ = ReadByte(r, uint32(dl))
+	//d, _ := ReadByte(r, uint32(dl))
 	n += int(dl)
-	s.log.Printf("PsSysBound:%x", d)
+	//s.log.Printf("PsSysBound:%x", d)
 	/*
 		psh.StreamId, _ = ReadUint8(r)
 		n += 1
@@ -180,8 +181,8 @@ func ParsePsSysHeader(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
 		psh.PStdBufferSizeBound = (b16 >> 0) & 0x1fff
 	*/
 
-	s.log.Printf("%#v, rLen=%d", psh, n)
-	psp.UseNum += n
+	//s.log.Printf("%#v, rLen=%d", psh, n)
+	pps.UseNum += n
 	return n, nil
 }
 
@@ -225,7 +226,7 @@ type PgmStreamInfo struct {
 	DescriptorData     []byte
 }
 
-func ParsePgmStreamMap(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
+func ParsePgmStreamMap(s *Stream, pps *PsPacket, r *bytes.Reader) (int, error) {
 	var psm PgmStreamMap
 	var n int
 
@@ -259,8 +260,8 @@ func ParsePgmStreamMap(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
 	psm.CRC32, _ = ReadUint32(r, 4, BE)
 	n += 4
 
-	s.log.Printf("%#v, rLen=%d", psm, n)
-	psp.UseNum += n
+	//s.log.Printf("%#v, rLen=%d", psm, n)
+	pps.UseNum += n
 	return n, nil
 }
 
@@ -308,7 +309,6 @@ func ParsePgmStreamInfo(s *Stream, r *bytes.Reader) int {
 	}
 
 	s.log.Printf("%#v, rLen=%d", sm, n)
-	//s.SmArr = append(s.SmArr, sm)
 	return n
 }
 
@@ -329,95 +329,16 @@ func IsTrailing(s *Stream, scb []byte) bool {
 	return true
 }
 
-func ParsePs0(s *Stream, psp *PsPacket) error {
-	/*
-		r := bytes.NewReader(rp.Data[rp.UseNum:])
-
-		tf := true
-		//尾部数据 可能出现 Len=20, UseNum=12, SeqNum=166
-		//dataLen:8, data:f2f3c444457fd41c
-		if len(rp.Data[rp.UseNum:]) >= 4 {
-			//不一定是尾部数据
-			tf = IsTrailing(s, rp.Data[rp.UseNum:rp.UseNum+4])
-			s.log.Printf("StartCode:%x, IsTrailing:%t", rp.Data[rp.UseNum:rp.UseNum+4], tf)
-		} else {
-			//肯定是尾部数据
-			s.log.Printf("StartCode:%x, IsTrailing:%t", rp.Data[rp.UseNum:], tf)
-		}
-
-		//时间戳相等表示是视频帧后续数据 不等表示新视频帧的开始
-		//音频帧 可能跟 视频帧 时间戳相同 所以还要判断4字节开始码
-		if s.RtpTsCurt == rp.Timestamp && tf == true {
-			s.log.Println("--- rtp packet trailing ---")
-			ParseVideoTrailing(s, r, rp)
-			return nil
-		}
-
-		//需要处理上个帧的数据, 把rtpPakcet组装成frame(pes)
-		//并通过chan发送给frame处理协程
-		if s.FrameRtp.RecvLen != 0 { //第一帧不能进来
-			s.log.Println("--- rtp packet handle ---")
-			RtpData2RtmpMsg(s) //分发数据给播放者
-		}
-
-		s.log.Println("--- rtp packet newframe ---")
-		s.FrameRtp.Type = ""
-		s.FrameRtp.DataLen = 0
-		s.FrameRtp.RecvLen = 0
-		s.FrameRtp.RtpPkgs = nil //清空切片
-		s.RtpTsCurt = rp.Timestamp
-
-		//一般情况, 只有视频IDR帧和音频帧才会走下面逻辑
-		//其他走 上面的 rtp packet trailing 逻辑
-		var sc uint32
-		var err error
-		var i uint32
-		for {
-			sc, err = ReadUint32(r, 4, BE)
-			if err != nil {
-				s.log.Println(err)
-				return err
-			}
-			rp.UseNum += 4
-			s.log.Printf("-----> %d, StartCode=%#08x", i, sc)
-
-			//PS流总是以0x000001BA开始, 以0x000001B9结束
-			//对于一个PS文件, 有且只有一个结束码0x000001B9
-			//不过 对于直播PS流, 是没有结束码的
-			switch sc {
-			case 0x000001ba:
-				_, err = ParsePsHeader(s, rp, r)
-			case 0x000001bb:
-				_, err = ParsePsSysHeader(s, rp, r)
-			case 0x000001bc:
-				_, err = ParsePgmStreamMap(s, rp, r)
-			case 0x000001c0:
-				_, err = ParseAudio(s, rp, r)
-			case 0x000001e0:
-				_, err = ParseVideo(s, rp, r)
-			default:
-				err = fmt.Errorf("undefined startcode %#08x", sc)
-				s.log.Println(err)
-				return err
-			}
-
-			if err != nil {
-				s.log.Println(err)
-				return err
-			}
-			i++
-		}
-	*/
-	return nil
-}
-
-func ParsePs(s *Stream, psp *PsPacket) error {
-	r := bytes.NewReader(psp.Data[:])
-
-	var sc uint32
+//pps中可能有时间戳相同的音频和视频数据, 要做分离
+func ParsePs(s *Stream, pps *PsPacket) error {
 	var err error
+	var sc uint32
 	var i uint32
+	var pp *PsPacket
+
+	r := bytes.NewReader(pps.Data[:])
 	for {
+		pp = nil
 		sc, err = ReadUint32(r, 4, BE)
 		if err != nil {
 			if err != io.EOF {
@@ -426,33 +347,40 @@ func ParsePs(s *Stream, psp *PsPacket) error {
 			}
 			return nil
 		}
-		psp.UseNum += 4
-		s.log.Printf("-----> %d, StartCode=%#08x", i, sc)
+		pps.UseNum += 4
+		s.log.Printf("i=%d, StartCode=%#08x", i, sc)
 
 		//PS流总是以0x000001BA开始, 以0x000001B9结束
 		//对于PS文件 有且只有一个结束码0x000001B9, 对于直播PS流 没有结束码
 		switch sc {
 		case 0x000001ba:
-			_, err = ParsePsHeader(s, psp, r)
+			_, err = ParsePsHeader(s, pps, r)
 		case 0x000001bb:
-			_, err = ParsePsSysHeader(s, psp, r)
+			_, err = ParsePsSysHeader(s, pps, r)
 		case 0x000001bc:
-			_, err = ParsePgmStreamMap(s, psp, r)
+			_, err = ParsePgmStreamMap(s, pps, r)
 		case 0x000001c0:
-			psp.Type = "Audio"
-			_, err = ParseAudio(s, psp, r)
-			//s.log.Printf("AudioData:%x", psp.Data[psp.UseNum:])
+			pp, err = ParseAudio(s, pps, r)
+			//s.log.Printf("AudioData:%x", pps.Data[pps.UseNum:])
 		case 0x000001e0:
-			psp.Type = "Video"
-			_, err = ParseVideo(s, psp, r)
-			//s.log.Printf("VideoData:%x", psp.Data[psp.UseNum:])
+			pp, err = ParseVideo(s, pps, r)
+			//s.log.Printf("VideoData:%x", pps.Data[pps.UseNum:])
 		default:
 			err = fmt.Errorf("undefined startcode %#08x", sc)
 		}
-
 		if err != nil {
 			s.log.Println(err)
 			return err
+		}
+
+		if pp == nil {
+			continue
+		}
+
+		if len(s.PsPktChan) < conf.RtpRtcp.PsPktChanNum {
+			s.PsPktChan <- pp
+		} else {
+			s.log.Printf("PsPktChanLen=%d, MaxLen=%d", len(s.PsPktChan), conf.RtpRtcp.PsPktChanNum)
 		}
 		i++
 	}

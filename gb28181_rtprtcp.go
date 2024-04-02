@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"container/list"
 	"fmt"
 	"io"
@@ -47,114 +46,35 @@ type FrameRtp struct {
 	RtpPkgs []RtpPacket //多个时间戳相同的rtp包
 }
 
-//TODO: I/P帧 丢一部分rtp数据 该如何处理
-//TODO: 有些ipc发送的首包 不一定是头信息+IDR, 可能是P帧或音频帧, 这些数据要扔掉
-//1 合并rtp数据并转为RtmpMsg; 2 分发RtmpMsg给播放者;
-func RtpData2RtmpMsg(s *Stream) (*Chunk, error) {
-	var rp *RtpPacket
-	var buf bytes.Buffer
-	rtpNum := len(s.FrameRtp.RtpPkgs)
-	n, l := 0, 0
-
-	//把多个rtp包中的载荷 拼接成EsData
-	for i := 0; i < rtpNum; i++ {
-		rp = &(s.FrameRtp.RtpPkgs[i])
-		n = len(rp.Data[rp.EsIdx:])
-		buf.Write(rp.Data[rp.EsIdx:])
-		l += n
-	}
-	d := buf.Bytes() //EsData
-
-	//实际接收到的数据 可能比EsData数据 多, 也就是一个Es里有多个nalu, 比如
-	//000001e0 0ca2, 视频, 000001c0 xxxx, 音频
-	//000001bd 006a, 海康私有标识, 丢弃后看不到视频里移动侦测的红框
-	pos := s.FrameRtp.DataLen //协议总EsData的实际长度
-	if s.FrameRtp.RecvLen != s.FrameRtp.DataLen {
-		s.log.Printf("DataHead:%x", d[:10])
-		s.log.Printf("DataXxxx:%x", d[pos:pos+4]) //不属于本帧的特殊数据
-	}
-	//私有数据的长度
-	PrivDataLen := s.FrameRtp.RecvLen - pos
-
-	s.log.Printf("RtpNum:%d, FrameLen:%d, PrivLen:%d, RecvLen=%d, CalcFrameLen=%d", rtpNum, s.FrameRtp.DataLen, PrivDataLen, s.FrameRtp.RecvLen, l)
-
-	d = CreateVideoPacket(d[:pos], s.FrameRtp.Type, "h264")
-	c := CreateMessage(MsgTypeIdVideo, uint32(len(d)), d)
-	c.Csid = 3
-	c.Timestamp = rp.Timestamp
-
-	//帧数据写入到rtmp的gop中, 用于rtmp快速启播
-	s.GopCache.MediaData.PushBack(&c)
-	if s.FrameRtp.Type == "VideoKeyFrame" {
-		s.GopCache.GopCacheNum++
-		s.FrameNum = 0
-	}
-	s.FrameNum++
-	if uint32(s.FrameNum) == conf.Rtmp.GopFrameNum {
-		GopCacheUpdate(s)
-	}
-	//GopCacheShow(s)
-
-	s.log.Printf("<== send DataType:%s, DataLen:%d", s.FrameRtp.Type, len(d))
-
-	//轮询发送数据给所有播放者 通过每个播放者的chan
-	//播放者到播放器的网络差 也不会引起这个循环阻塞
-	//详细说明见 RtmpTransmit()
-	var p *Stream //player
-	s.Players.Range(func(k, v interface{}) bool {
-		p, _ = v.(*Stream)
-		s.log.Printf("<== send %s to %s", s.FrameRtp.Type, p.Key)
-		if p.PlayClose == true {
-			s.log.Printf("<== player %s is stop", p.Key)
-			//RtmpStop(p)
-			s.Players.Delete(p.Key)
-			return true
-		}
-
-		if p.NewPlayer == true {
-			//发送metadata, videoheader, audioheader, gop
-			GopCacheSendRtmp(s, p, &(s.GopCache))
-			p.NewPlayer = false
-			return true
-		}
-
-		if len(p.FrameChan) < 100 {
-			p.FrameChan <- c
-		} else {
-			s.log.Printf("<== player %s ChanLen=100")
-		}
-		return true
-	})
-	return &c, nil
-}
-
-func RtpPkts2PsPkt(s *Stream) (*PsPacket, error) {
-	var rp *RtpPacket
+//TODO: 有些ipc可能从P帧或音频开始发送 这些数据最好扔掉
+func RtpPktList2PsPkt(s *Stream) (*PsPacket, error) {
 	var err error
 	var n *list.Element
-	psp := &PsPacket{}
+	var rp *RtpPacket
+	pp := &PsPacket{}
 
 	for e := s.RtpPktList.Front(); e != nil; e = n {
 		rp = (e.Value).(*RtpPacket)
 
-		if s.RtpPktCtTs != int64(rp.Timestamp) {
-			s.log.Printf("RtpPktCtTs=%d != RtpPktTs=%d", s.RtpPktCtTs, rp.Timestamp)
+		if rp.PayloadType != 0x60 {
+			s.log.Printf("RtpPt=%d(%s) is not ps", rp.PayloadType, rp.PtStr)
+			n = e.Next()
+			s.RtpPktList.Remove(e)
+			continue
+		}
+
+		if s.RtpPktCrtTs != int64(rp.Timestamp) {
+			s.log.Printf("RtpPktCrtTs(%d) != RtpTs(%d)", s.RtpPktCrtTs, rp.Timestamp)
 			break
 		}
-		psp.Timestamp = rp.Timestamp
-		//s.log.Printf("Seq=%d, Mark=%d, Ts=%d", rp.SeqNum, rp.Marker, rp.Timestamp)
 
-		if rp.PayloadType != 0x60 {
-			s.log.Printf("Rtp PayloadType=%d(%s) is not ps", rp.PayloadType, rp.PtStr)
-		}
-
-		psp.Data = append(psp.Data, rp.Data[12:]...)
+		pp.Timestamp = rp.Timestamp
+		pp.Data = append(pp.Data, rp.Data[rp.UseNum:]...)
 
 		n = e.Next()
 		s.RtpPktList.Remove(e)
 	}
-	psp.Type = "PsPkt"
-	return psp, err
+	return pp, err
 }
 
 /*************************************************/
@@ -228,40 +148,38 @@ func RtpServerUdp() {
 /*************************************************/
 /* rtp tcp
 /*************************************************/
-func RtpHandler(s *Stream) {
-	//var rps []*RtpPacket
-	var rp *RtpPacket
-	var ok bool
-	var psp *PsPacket
+func GbRtpPktHandler(s *Stream) {
 	var err error
+	var ok bool
+	var rp *RtpPacket
+	var pp *PsPacket
 
 	for {
-		rp, ok = <-s.RtpChan
+		rp, ok = <-s.RtpPktChan
 		if ok == false {
-			s.log.Printf("StreamId=%s, RtpHandler() stop", s.StreamId)
+			s.log.Printf("GbRtpPktHandler() stop")
 			break
 		}
-		s.log.Printf("--> RtpLen=%d(0x%x), SeqNum=%d, Pt=%s(%d), Ts=%d, Mark=%d, lhSeq=%d, ltSeq=%d", rp.Len, rp.Len, rp.SeqNum, rp.PtStr, rp.PayloadType, rp.Timestamp, rp.Marker, s.RtpPktListHeadSeq, s.RtpPktListTailSeq)
-		//s.log.Printf("rp.Len=%d, n=%d, Data=%x", rp.Len, n, rp.Data[:])
+		s.log.Printf("--> RtpLen=%d(0x%x), SeqNum=%d, Pt=%s(%d), Ts=%d, Mark=%d", rp.Len, rp.Len, rp.SeqNum, rp.PtStr, rp.PayloadType, rp.Timestamp, rp.Marker)
 
 		if s.RtpPktNeedSeq != rp.SeqNum {
-			s.log.Printf("RtpNeedSeq=%d, RtpSeq=%d", s.RtpPktNeedSeq, rp.SeqNum)
+			s.log.Printf("RtpPktNeedSeq(%d) != RtpSeq(%d)", s.RtpPktNeedSeq, rp.SeqNum)
 		}
 		s.RtpPktList.PushBack(rp) //从尾部插入, 绝大多数是这种
 		s.RtpPktNeedSeq = rp.SeqNum + 1
 
-		if s.RtpPktCtTs == -1 {
-			s.RtpPktCtTs = int64(rp.Timestamp)
+		if s.RtpPktCrtTs == -1 {
+			s.RtpPktCrtTs = int64(rp.Timestamp)
 		}
 
-		//rtp.Mark==1 表示一帧画面的最后一个rtp包到了
-		//TODO: rtp.Ts不相等 表示一帧画面的第一个rtp包到了
-		if rp.Marker == 0 && s.RtpPktCtTs == int64(rp.Timestamp) {
+		//rp.Marker==1 表示一帧画面的最后一个rtp包到了
+		//rp.Timestamp不同 表示一帧画面的第一个rtp包到了
+		if rp.Marker == 0 && s.RtpPktCrtTs == int64(rp.Timestamp) {
 			continue
 		}
 
 		//PrintList(s, &s.RtpPktList)
-		psp, err = RtpPkts2PsPkt(s)
+		pp, err = RtpPktList2PsPkt(s)
 		//PrintList(s, &s.RtpPktList)
 		if err != nil {
 			s.log.Println(err)
@@ -269,15 +187,14 @@ func RtpHandler(s *Stream) {
 		}
 
 		if rp.Marker == 1 {
-			s.RtpPktCtTs = -1
+			s.RtpPktCrtTs = -1
 		} else {
-			s.RtpPktCtTs = int64(rp.Timestamp)
+			s.RtpPktCrtTs = int64(rp.Timestamp)
 		}
-		s.log.Printf("RtpPktCtTs=%d, rp.Mark=%d, rp.Ts=%d", s.RtpPktCtTs, rp.Marker, rp.Timestamp)
+		s.log.Printf("PsPkt type=%s, dLen=%d, PsTs=%d, RtpPktCrtTs=%d ", pp.Type, len(pp.Data), pp.Timestamp, s.RtpPktCrtTs)
 
-		//通过chan发送给rtmp发送程序
-		s.log.Printf("PsPacket Type=%s, Ts=%d, PsPktDataLen=%d", psp.Type, psp.Timestamp, len(psp.Data))
-		err = ParsePs(s, psp)
+		//通过chan发送给GbNetPushRtmp()
+		err = ParsePs(s, pp)
 		if err != nil {
 			s.log.Println(err)
 		}
@@ -297,25 +214,24 @@ func PrintList(s *Stream, l *list.List) {
 	s.log.Printf("list node num is %d", i)
 }
 
-/*
-1 接收并缓存rtp包, 如何缓存chan/map/list
-2 rtp包组成视频帧, 每个rtp包触发一次检查, 每次尽可能多组成视频帧
-3 视频帧以rtmp方式发送, 每次尽可能多发送
-*/
-func RtpReceiverTcp(c net.Conn) {
+//1 接收rtp包, 使用list暂存rtp包
+//2 rtp包组成ps包, 解析ps/pes提取音视频数据
+//3 音视频数据按rtmp格式封装并发送
+func RtpRecvTcp(c net.Conn) {
+	var err error
 	var l uint16
 	var d []byte
 	var rp *RtpPacket
-	var err error
 	var s *Stream
 
 	for {
-		//因为tcp会作拆包和粘包的处理, 所以RTP(TCP)比RTP(UDP)多2字节长度信息
+		//tcp会作拆包和粘包的处理, RTP(TCP)有2字节长度信息
 		l, err = ReadUint16(c, 2, BE)
 		if err != nil {
 			log.Println(err)
 			if s != nil {
 				s.log.Println(err)
+				//TODO: 释放资源
 				StreamMap.Delete(s.Key)
 				SsrcMap.Delete(s.RtpSsrcUint)
 			}
@@ -330,61 +246,40 @@ func RtpReceiverTcp(c net.Conn) {
 		}
 
 		rp = RtpParse(d)
-		//首个rtp包, 进不去; 首个rtp会进入SsrcFindStream();
-		if s != nil && rp.Ssrc != s.RtpSsrcUint {
-			s.log.Printf("RtpSsrc=%.10d != MySsrc=%.10d, drop RtpPacket", rp.Ssrc, s.RtpSsrcUint)
+		if rp.Ssrc != s.RtpSsrcUint && s != nil {
+			s.log.Printf("RtpSsrc=%.10d != MySsrc=%.10d, drop this RtpPkt", rp.Ssrc, s.RtpSsrcUint)
 			continue
 		}
 
 		if s == nil {
 			s, err = SsrcFindStream(rp.Ssrc)
 			if err != nil {
-				//不是cc下发的任务, 不接收媒体数据
 				log.Println(err)
 				break
 			}
 
 			s.Conn0 = c
 			s.RemoteAddr = c.RemoteAddr().String()
-			s.RtpChan = make(chan *RtpPacket, 1000)
-			//s.RtpRecChan = make(chan RtpPacket, 100)
-			//s.FrameChan = make(chan Frame, 100)
-			s.RtpSeqNeed = rp.SeqNum
+			s.RtpPktChan = make(chan *RtpPacket, conf.RtpRtcp.RtpPktChanNum)
+			s.PsPktChan = make(chan *PsPacket, conf.RtpRtcp.PsPktChanNum)
+			s.RtpPktNeedSeq = rp.SeqNum
+			s.RtpPktCrtTs = int64(rp.Timestamp)
 
 			log.Printf("rAddr=%s, ssrc=%.10d, streamId=%s", s.RemoteAddr, rp.Ssrc, s.Key)
 			s.log.Printf("rAddr=%s, ssrc=%.10d, streamId=%s", s.RemoteAddr, rp.Ssrc, s.Key)
 			s.log.Printf("%#v", rp.RtpHeader)
 
-			//s.RtpPktList
-			s.RtpPktListHeadSeq = rp.SeqNum
-			s.RtpPktListTailSeq = rp.SeqNum
-			s.RtpPktNeedSeq = rp.SeqNum
-			//s.RtpPktListMutex   sync.Mutex //rtplist锁, 防止插入和删除并发
-			s.RtpPktCtTs = int64(rp.Timestamp)
-
-			//go Gb281812Mem2RtmpServer(s)
-			go Gb28181Net2RtmpServer(s)
-			go RtpHandler(s)
-			//go RtpRec(s)
+			go GbNetPushRtmp(s)
+			go GbRtpPktHandler(s)
 		}
 		//s.log.Printf("RtpLen=%d(0x%x), SeqNum=%d, Pt=%s(%d), Ts=%d, Mark=%d", rp.Len, rp.Len, rp.SeqNum, rp.PtStr, rp.PayloadType, rp.Timestamp, rp.Marker)
 
-		if len(s.RtpChan) < 1000 {
-			s.RtpChan <- rp
+		if len(s.RtpPktChan) < conf.RtpRtcp.RtpPktChanNum {
+			s.RtpPktChan <- rp
 		} else {
-			s.log.Printf("RtpChanLen=%d", len(s.RtpChan))
+			s.log.Printf("RtpPktChanLen=%d, MaxLen=%d", len(s.RtpPktChan), conf.RtpRtcp.RtpPktChanNum)
 		}
-
-		/*
-			if len(s.RtpRecChan) < 100 {
-				s.RtpRecChan <- *rp
-			} else {
-				s.log.Printf("RtpRecChanLen=%d", len(s.RtpRecChan))
-			}
-		*/
 	}
-	//TODO 回收资源
-	c.Close()
 }
 
 func RtpServerTcp() {
@@ -410,6 +305,6 @@ func RtpServerTcp() {
 		//音频端口建连后会马上断开, 音频数据还是通过视频端口过来
 		//RemoteAddr: 10.3.214.236:15060 ipc发送视频地址
 		//RemoteAddr: 10.3.214.236:15062 ipc发送音频地址
-		go RtpReceiverTcp(c)
+		go RtpRecvTcp(c)
 	}
 }
