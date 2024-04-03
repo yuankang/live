@@ -9,12 +9,10 @@ import (
 /*************************************************/
 /* ParsePsHeader
 /*************************************************/
-//VideoKeyFrame, VideoInterFrame
-//AudioG711a, AudioG711u, AudioAac
 type PsPacket struct {
-	Type      string
+	Type      string //video or audio
 	Timestamp uint32
-	Data      []byte
+	Data      []byte //pes data
 	UseNum    int
 }
 
@@ -336,7 +334,7 @@ func ParsePs(s *Stream, pps *PsPacket) error {
 	var i uint32
 	var pp *PsPacket
 
-	r := bytes.NewReader(pps.Data[:])
+	r := bytes.NewReader(pps.Data)
 	for {
 		pp = nil
 		sc, err = ReadUint32(r, 4, BE)
@@ -361,10 +359,8 @@ func ParsePs(s *Stream, pps *PsPacket) error {
 			_, err = ParsePgmStreamMap(s, pps, r)
 		case 0x000001c0:
 			pp, err = ParseAudio(s, pps, r)
-			//s.log.Printf("AudioData:%x", pps.Data[pps.UseNum:])
 		case 0x000001e0:
 			pp, err = ParseVideo(s, pps, r)
-			//s.log.Printf("VideoData:%x", pps.Data[pps.UseNum:])
 		default:
 			err = fmt.Errorf("undefined startcode %#08x", sc)
 		}

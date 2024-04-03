@@ -161,6 +161,7 @@ func GbRtpPktHandler(s *Stream) {
 			break
 		}
 		s.log.Printf("--> RtpLen=%d(0x%x), SeqNum=%d, Pt=%s(%d), Ts=%d, Mark=%d", rp.Len, rp.Len, rp.SeqNum, rp.PtStr, rp.PayloadType, rp.Timestamp, rp.Marker)
+		s.log.Printf("rtpData:%x", rp.Data)
 
 		if s.RtpPktNeedSeq != rp.SeqNum {
 			s.log.Printf("RtpPktNeedSeq(%d) != RtpSeq(%d)", s.RtpPktNeedSeq, rp.SeqNum)
@@ -246,7 +247,7 @@ func RtpRecvTcp(c net.Conn) {
 		}
 
 		rp = RtpParse(d)
-		if rp.Ssrc != s.RtpSsrcUint && s != nil {
+		if s != nil && rp.Ssrc != s.RtpSsrcUint {
 			s.log.Printf("RtpSsrc=%.10d != MySsrc=%.10d, drop this RtpPkt", rp.Ssrc, s.RtpSsrcUint)
 			continue
 		}
@@ -299,7 +300,7 @@ func RtpServerTcp() {
 			continue
 		}
 		log.Println("------ new rtp(tcp) connect ------")
-		//log.Println("RemoteAddr:", c.RemoteAddr().String())
+		log.Println("RemoteAddr:", c.RemoteAddr().String())
 
 		//有些ipc的音频和视频数据是通过不同端口发送的,
 		//音频端口建连后会马上断开, 音频数据还是通过视频端口过来

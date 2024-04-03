@@ -134,20 +134,27 @@ func RtmpConn(s *Stream) (*Stream, error) {
 	return sm, nil
 }
 
+func AudioHandler(s, sm *Stream, p *PsPacket) error {
+	return nil
+}
+
 func CreateSendMetaData(sm *Stream) ([]byte, error) {
 	sm.log.Println("<== Send MetaData")
 	info := make(Object)
-	info["audiocodecid"] = 10
-	info["audiosamplerate"] = 11025
-	info["audiosamplesize"] = 16
-	info["duration"] = 0
-	info["fileSize"] = 0
-	info["framerate"] = 15
-	info["height"] = 1280
-	info["width"] = 720
-	info["server"] = "sms"
-	info["stereo"] = false
-	info["videocodecid"] = 7
+	info["server"] = AppName
+	info["version"] = AppVersion
+	/*
+		info["fileSize"] = 0
+		info["duration"] = 0
+		info["videocodecid"] = 7
+		info["height"] = 1280
+		info["width"] = 720
+		info["framerate"] = 15
+		info["audiocodecid"] = 10
+		info["audiosamplerate"] = 11025
+		info["audiosamplesize"] = 16
+		info["stereo"] = false
+	*/
 	sm.log.Printf("MetaData:%#v", info)
 
 	d, err := AmfMarshal(sm, "@setDataFrame", "onMetaData", info)
@@ -164,166 +171,6 @@ func CreateSendMetaData(sm *Stream) ([]byte, error) {
 		return nil, err
 	}
 	return d, nil
-}
-
-func AudioHandler(s, sm *Stream, p *PsPacket) error {
-	sm.log.Printf("AudioDataxxx")
-	return nil
-}
-
-func VideoHandler(s, sm *Stream, p *PsPacket) error {
-	var ck *Chunk
-	var d []byte
-
-	nis, err := FindAnnexbStartCode1(p.Data)
-	if err != nil {
-		sm.log.Println(err)
-		return err
-	}
-
-	for i := 0; i < len(nis); i++ {
-		sm.log.Printf("%d, %dByte0x00, Pos=%d, Type=%s, Len=%d", i, nis[i].ByteNum, nis[i].BytePos, nis[i].Type, nis[i].ByteLen)
-
-		switch nis[i].Type {
-		case "vps":
-			if utils.SliceEqual(s.VpsData, nis[i].Data) {
-				continue
-			}
-			s.VpsChange = true
-			sm.log.Printf("VpsDataOld:%x", s.VpsData)
-			sm.log.Printf("VpsDataNew:%x", nis[i].Data)
-			s.VpsData = nis[i].Data
-		case "sps":
-			if utils.SliceEqual(s.SpsData, nis[i].Data) {
-				continue
-			}
-			s.SpsChange = true
-			sm.log.Printf("SpsDataOld:%x", s.SpsData)
-			sm.log.Printf("SpsDataNew:%x", nis[i].Data)
-			s.SpsData = nis[i].Data
-			sps, err := SpsParse0(sm, s.SpsData)
-			if err != nil {
-				sm.log.Println(err)
-				continue
-			}
-			//sm.log.Printf("%#v", sps)
-			s.Width = int((sps.PicWidthInMbsMinus1 + 1) * 16)
-			s.Height = int((sps.PicHeightInMapUnitsMinus1 + 1) * 16)
-			sm.log.Printf("video width=%d, height=%d", s.Width, s.Height)
-		case "pps":
-			if utils.SliceEqual(s.PpsData, nis[i].Data) {
-				continue
-			}
-			s.PpsChange = true
-			sm.log.Printf("PpsDataOld:%x", s.PpsData)
-			sm.log.Printf("PpsDataNew:%x", nis[i].Data)
-			s.PpsData = nis[i].Data
-		case "sei":
-			if utils.SliceEqual(s.SeiData, nis[i].Data) {
-				continue
-			}
-			s.SeiChange = true
-			sm.log.Printf("SeiDataOld:%x", s.SeiData)
-			sm.log.Printf("SeiDataNew:%x", nis[i].Data)
-			s.SeiData = nis[i].Data
-		case "ifrm":
-			//vData = nis[i].Data
-		case "pfrm":
-			//vData = nis[i].Data
-		default:
-			sm.log.Printf("undefine nalu type")
-		}
-	}
-
-	//sps或pps变更, 需发送video sequence header(h264含sps+pps)
-	//sps或pps变更, 需发送video sequence header(h265含vps+sps+pps)
-	if s.VpsChange == true || s.SpsChange == true || s.PpsChange == true {
-		sm.log.Printf("VpsChange=%t, SpsChange=%t, PpsChange=%t", s.VpsChange, s.SpsChange, s.PpsChange)
-
-		s.AvcSH, _ = CreateAvcSequenceHeader(s, sm)
-
-		ck = CreateMessage0(MsgTypeIdVideo, uint32(len(s.AvcSH)), s.AvcSH)
-		ck.Csid = 3
-		ck.Timestamp = p.Timestamp
-
-		sm.log.Printf("MsgLen=%d, MsgData=%x", len(s.AvcSH), s.AvcSH)
-		err := MessageSplit(sm, ck, true)
-		if err != nil {
-			sm.log.Println(err)
-			return err
-		}
-
-		s.VpsChange = false
-		s.SpsChange = false
-		s.PpsChange = false
-	}
-
-	for i := 0; i < len(nis); i++ {
-		if nis[i].Type == "vps" || nis[i].Type == "sps" || nis[i].Type == "pps" || nis[i].Type == "sei" {
-			continue
-		}
-
-		if nis[i].Type == "ifrm" && s.SeiChange == true {
-			//sei变更, 需发送video data(sei+ifrm)
-			sm.log.Printf("send video data(sei+ifrm)")
-			s.SeiChange = false
-
-			d = CreateAvcFrame(sm, nis[i], s.SeiData)
-		} else if nis[i].Type == "ifrm" || nis[i].Type == "pfrm" {
-			//sei不变, 需发送video data(ifrm或pfrm)
-			sm.log.Printf("send video data(%s)", nis[i].Type)
-
-			d = CreateAvcFrame(sm, nis[i], nil)
-		}
-
-		ck = CreateMessage0(MsgTypeIdVideo, uint32(len(d)), d)
-		err = MessageSplit(sm, ck, false)
-		if err != nil {
-			sm.log.Println(err)
-			return err
-		}
-	}
-	return nil
-}
-
-func GbNetPushRtmp(s *Stream) {
-	sm, err := RtmpConn(s)
-	if err != nil {
-		s.log.Println(err)
-		return
-	}
-
-	_, err = CreateSendMetaData(sm)
-	if err != nil {
-		s.log.Println(err)
-		return
-	}
-
-	var p *PsPacket
-	var ok bool
-	//下面就要接收并发送数据了
-	for {
-		p, ok = <-s.PsPktChan
-		if ok == false {
-			sm.log.Printf("%s, GbNetPushRtmp() stop", sm.StreamId)
-			break
-		}
-		if p.Type == "Audio" {
-			sm.log.Printf("PsType=%s, PsTs=%d, PsData=%x", p.Type, p.Timestamp, p.Data[:])
-		} else {
-			sm.log.Printf("PsType=%s, PsTs=%d, PsData=%x", p.Type, p.Timestamp, p.Data[:100])
-		}
-
-		switch p.Type {
-		case "Video":
-			err = VideoHandler(s, sm, p)
-		case "Audio":
-			err = AudioHandler(s, sm, p)
-		}
-		if err != nil {
-			sm.log.Println(err)
-		}
-	}
 }
 
 //1+1+3+n=5+n
@@ -394,15 +241,15 @@ func CreateAvcSequenceHeader(s *Stream, sm *Stream) ([]byte, error) {
 }
 
 //此处h264数据是annexB格式 要转为 rtmp需要的avcc格式(NaluLen4字节)
-func CreateAvcFrame(sm *Stream, ni *NaluInfo, sei []byte) []byte {
+func CreateAvcFrame(sm *Stream, ft int, ni *NaluInfo, sei []byte) []byte {
 	var rvt RtmpVideoTag
-	rvt.FrameType = 1
+	rvt.FrameType = uint8(ft)
 	rvt.CodecID = 7
 	rvt.AVCPacketType = 1
 	rvt.CompositionTime = 0
 
 	//这里默认 都是00000001 没有000001
-	//去掉 00000001 改为 4字节长度
+	//data中含有4字节开始码, 去掉00000001 改为 4字节长度
 	vLen := len(ni.Data)
 	var seiLen int
 	if sei != nil {
@@ -412,9 +259,9 @@ func CreateAvcFrame(sm *Stream, ni *NaluInfo, sei []byte) []byte {
 	var i int
 	var d []byte
 	if sei != nil {
-		d = make([]byte, 5+seiLen+vLen)
+		d = make([]byte, 5+8+seiLen+vLen)
 	} else {
-		d = make([]byte, 5+vLen)
+		d = make([]byte, 5+4+vLen)
 	}
 
 	d[i] = rvt.FrameType<<4 | rvt.CodecID
@@ -427,13 +274,179 @@ func CreateAvcFrame(sm *Stream, ni *NaluInfo, sei []byte) []byte {
 	if sei != nil {
 		Uint32ToByte(uint32(seiLen), d[i:i+4], BE)
 		i += 4
-		copy(d[i:], sei[4:])
+		copy(d[i:], sei)
 		i += seiLen
 	}
 
 	Uint32ToByte(uint32(vLen), d[i:i+4], BE)
 	i += 4
-	copy(d[i:], ni.Data[4:])
+	copy(d[i:], ni.Data)
 	i += vLen
 	return d
+}
+
+func HandleAvcSequenceHeader(s, sm *Stream, p *PsPacket, nis []*NaluInfo) error {
+	var ni *NaluInfo
+	var ck *Chunk
+
+	for i := 0; i < len(nis); i++ {
+		ni = nis[i]
+		sm.log.Printf("i=%d, Type=%s, Len=%d, Num(0x00)=%d, Pos=%d, Data=%x", i, ni.Type, ni.ByteLen, ni.ByteNum, ni.BytePos, ni.Data[:50])
+
+		switch ni.Type {
+		case "vps":
+			if utils.SliceEqual(s.VpsData, ni.Data) {
+				continue
+			}
+			s.VpsChange = true
+			sm.log.Printf("VpsDataOld:%x", s.VpsData)
+			sm.log.Printf("VpsDataNew:%x", ni.Data)
+			s.VpsData = ni.Data
+		case "sps":
+			if utils.SliceEqual(s.SpsData, ni.Data) {
+				continue
+			}
+			s.SpsChange = true
+			sm.log.Printf("SpsDataOld:%x", s.SpsData)
+			sm.log.Printf("SpsDataNew:%x", ni.Data)
+			s.SpsData = ni.Data
+			sps, err := SpsParse0(sm, s.SpsData)
+			if err != nil {
+				sm.log.Println(err)
+				continue
+			}
+			//sm.log.Printf("%#v", sps)
+			s.Width = int((sps.PicWidthInMbsMinus1 + 1) * 16)
+			s.Height = int((sps.PicHeightInMapUnitsMinus1 + 1) * 16)
+			sm.log.Printf("video width=%d, height=%d", s.Width, s.Height)
+		case "pps":
+			if utils.SliceEqual(s.PpsData, ni.Data) {
+				continue
+			}
+			s.PpsChange = true
+			sm.log.Printf("PpsDataOld:%x", s.PpsData)
+			sm.log.Printf("PpsDataNew:%x", ni.Data)
+			s.PpsData = ni.Data
+		case "sei":
+			if utils.SliceEqual(s.SeiData, ni.Data) {
+				continue
+			}
+			s.SeiChange = true
+			sm.log.Printf("SeiDataOld:%x", s.SeiData)
+			sm.log.Printf("SeiDataNew:%x", ni.Data)
+			s.SeiData = ni.Data
+		case "ifrm", "pfrm":
+		default:
+			sm.log.Printf("undefine nalu type")
+		}
+	}
+
+	//vps/sps/pps变更, 需发送video sequence header(h264含sps+pps, h265含vps+sps+pps)
+	if s.VpsChange == true || s.SpsChange == true || s.PpsChange == true {
+		sm.log.Println("<-- Send AvcSequenceHeader")
+		sm.log.Printf("VpsChange=%t, SpsChange=%t, PpsChange=%t", s.VpsChange, s.SpsChange, s.PpsChange)
+
+		//TODO 这里要区分h264 h265
+		s.AvcSH, _ = CreateAvcSequenceHeader(s, sm)
+
+		ck = CreateMessage0(MsgTypeIdVideo, uint32(len(s.AvcSH)), s.AvcSH)
+		ck.Csid = 3
+		ck.Timestamp = p.Timestamp / 90
+
+		sm.log.Printf("MsgLen=%d, MsgData=%x", len(s.AvcSH), s.AvcSH)
+		err := MessageSplit(sm, ck, true)
+		if err != nil {
+			sm.log.Println(err)
+			return err
+		}
+
+		s.VpsChange = false
+		s.SpsChange = false
+		s.PpsChange = false
+	}
+	return nil
+}
+
+//1 拆分出nalu, h264关键帧(sps+pps+sei+ifrm), 非关键帧(pfrm)
+//2 依据sps/pps, 生成或更新avc sequence header, 并发送
+//3 依据sei, 生成并发送视频数据 annexB格式转avcc格式
+func VideoHandler(s, sm *Stream, p *PsPacket) error {
+	nis, err := FindAnnexbStartCode1(p.Data, s.VideoCodecType)
+	if err != nil {
+		sm.log.Println(err)
+		return err
+	}
+
+	err = HandleAvcSequenceHeader(s, sm, p, nis)
+	if err != nil {
+		sm.log.Println(err)
+		return err
+	}
+
+	var ni *NaluInfo
+	var ds, d []byte
+	var ck *Chunk
+	for i := 0; i < len(nis); i++ {
+		ni = nis[i]
+		if ni.Type == "vps" || ni.Type == "sps" || ni.Type == "pps" || ni.Type == "sei" {
+			continue
+		}
+
+		if ni.Type == "ifrm" && s.SeiChange == true {
+			//sei变更, 需发送video data(sei+ifrm)
+			s.SeiChange = false
+			d = CreateAvcFrame(sm, 1, ni, s.SeiData)
+		} else if ni.Type == "ifrm" || ni.Type == "pfrm" {
+			//sei不变, 需发送video data(ifrm或pfrm)
+			d = CreateAvcFrame(sm, 2, ni, nil)
+		}
+		ds = append(ds, d...)
+	}
+
+	ck = CreateMessage0(MsgTypeIdVideo, uint32(len(ds)), ds)
+	ck.Csid = 3
+	ck.Timestamp = p.Timestamp / 90
+
+	err = MessageSplit(sm, ck, false)
+	if err != nil {
+		sm.log.Println(err)
+		return err
+	}
+	return nil
+}
+
+func GbNetPushRtmp(s *Stream) {
+	sm, err := RtmpConn(s)
+	if err != nil {
+		s.log.Println(err)
+		return
+	}
+
+	//TODO 此处metadata不包含音视频参数
+	_, err = CreateSendMetaData(sm)
+	if err != nil {
+		s.log.Println(err)
+		return
+	}
+
+	var p *PsPacket
+	var ok bool
+	for {
+		p, ok = <-s.PsPktChan
+		if ok == false {
+			sm.log.Printf("%s, GbNetPushRtmp() stop", sm.StreamId)
+			break
+		}
+		sm.log.Printf("PsType=%s, PsTs=%d, PsData=%x", p.Type, p.Timestamp, p.Data)
+
+		switch p.Type {
+		case "video":
+			err = VideoHandler(s, sm, p)
+		case "audio":
+			err = AudioHandler(s, sm, p)
+		}
+		if err != nil {
+			sm.log.Println(err)
+		}
+	}
 }

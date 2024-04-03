@@ -176,14 +176,14 @@ func ParseAudio(s *Stream, pps *PsPacket, r *bytes.Reader) (*PsPacket, error) {
 	ph.PesPacketLength, _ = ReadUint16(r, 2, BE)
 	pps.UseNum += 2
 	//ph.PesPacketLength 表示音频数据长度时 是准确值
-	s.log.Printf("PesPacketLength=%d, Audio", ph.PesPacketLength)
+	s.log.Printf("PesPacketLength=%d, audio", ph.PesPacketLength)
 
 	oph, l := ParseOptPesHeader(s, r)
 	s.log.Printf("%#v", oph)
 	pps.UseNum += l
 
 	pp := &PsPacket{}
-	pp.Type = "Audio"
+	pp.Type = "audio"
 	pp.Timestamp = pps.Timestamp
 
 	//这里获得去掉pes头的音频数据 也就是 g711或aac
@@ -229,14 +229,14 @@ func ParseVideo(s *Stream, pps *PsPacket, r *bytes.Reader) (*PsPacket, error) {
 	ph.PesPacketLength, _ = ReadUint16(r, 2, BE)
 	pps.UseNum += 2
 	//ph.PesPacketLength 表示视频数据长度时 不准确或为0 一般不用这个值
-	s.log.Printf("PesPacketLength=%d, Video", ph.PesPacketLength)
+	s.log.Printf("PesPacketLength=%d, video", ph.PesPacketLength)
 
 	oph, l := ParseOptPesHeader(s, r)
 	s.log.Printf("%#v", oph)
 	pps.UseNum += l
 
 	pp := &PsPacket{}
-	pp.Type = "Video"
+	pp.Type = "video"
 	pp.Timestamp = pps.Timestamp
 
 	//这里获得去掉pes头的视频数据 也就是nalu

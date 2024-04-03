@@ -50,17 +50,17 @@ startCode(4字节)	0x00000001
 2023/04/06 16:48:25 2, main.NaluInfo{ByteNum:3, BytePos:14, ByteLen:0}
 2023/04/06 16:48:25 14
 */
-//Type    string //vps/sps/pps/sei/ifrm/pfrm
 type NaluInfo struct {
 	Type    string //vps/sps/pps/sei/ifrm/pfrm
-	Data    []byte
-	ByteNum int //3表示0x000001, 4表示0x00000001
-	BytePos int //0x00000001 左边第一个00的下标
-	ByteLen int //0x00000001 后面的数据长度
+	Data    []byte //不包含开始码
+	ByteNum int    //3表示0x000001, 4表示0x00000001
+	BytePos int    //0x00000001 左边第一个00的下标
+	ByteLen int    //0x00000001 后面的数据长度, 也就是Data长度
 }
 
 //只找0x00000001
-func FindAnnexbStartCode1(d []byte) ([]*NaluInfo, error) {
+//ct VideoCodecType, H264, H265
+func FindAnnexbStartCode1(d []byte, ct string) ([]*NaluInfo, error) {
 	var err error
 	l := len(d)
 	if l < 5 {
@@ -74,7 +74,16 @@ func FindAnnexbStartCode1(d []byte) ([]*NaluInfo, error) {
 			ni := &NaluInfo{}
 			ni.BytePos = i
 			ni.ByteNum = 4
-			ni.Type = GetNaluType(d[i+4:i+5], "h264")
+
+			switch ct {
+			case "H264":
+				ni.Type = GetNaluTypeH264(d[i+4 : i+5])
+			case "H265":
+				ni.Type = GetNaluTypeH265(d[i+4 : i+6])
+			default:
+				err = fmt.Errorf("undefined VideoCodecType %s", ct)
+				return nil, err
+			}
 
 			nis = append(nis, ni)
 		}
@@ -139,8 +148,7 @@ func FindAnnexbStartCode(d []byte) ([]NaluInfo, int) {
 	return nis, fl
 }
 
-//fmt h264/h265
-func GetNaluType(d []byte, fmt string) string {
+func GetNaluTypeH264(d []byte) string {
 	var nh NaluHeader
 	nh.ForbiddenZeroBit = (d[0] >> 7) & 0x1
 	nh.NalRefIdc = (d[0] >> 5) & 0x3
@@ -158,6 +166,37 @@ func GetNaluType(d []byte, fmt string) string {
 		return "sps"
 	case 8: //PPS
 		return "pps"
+	default:
+		return "unknow"
+	}
+	return "unknow"
+}
+
+func GetNaluTypeH265(d []byte) string {
+	nh := NaluHeaderH265{}
+	nh.ForbiddenZeroBit = d[0] >> 7
+	nh.NalUnitType = (d[0] >> 1) & 0x3f
+	nh.NuhLayerId = ((d[0] & 0x1) << 5) | (d[1]>>3)&0x1f
+	nh.NuhTemporalIdPlus1 = d[1] & 0x7
+	//log.Printf("%#v", nh)
+
+	switch nh.NalUnitType {
+	case 1: //P帧
+		return "pfrm"
+	case 19: //IDR
+		return "ifrm"
+	case 32: //VPS
+		return "vps"
+	case 33: //SPS
+		return "sps"
+	case 34: //PPS
+		return "pps"
+	case 35: //AUD
+		return "aud"
+	case 39: //SEI
+		return "seipre"
+	case 40: //SEI
+		return "seisuf"
 	default:
 		return "unknow"
 	}
@@ -698,9 +737,9 @@ func SpsParse(data []byte) (*Sps, error) {
 }
 
 func SpsParse0(s *Stream, data []byte) (*Sps, error) {
-	s.log.Printf("SpsData1:%d, %x", len(data), data)
+	//s.log.Printf("SpsData1:%d, %x", len(data), data)
 	d := PreventionCodeWipe(data)
-	s.log.Printf("SpsData2:%d, %x", len(d), d)
+	//s.log.Printf("SpsData2:%d, %x", len(d), d)
 
 	//sps长度要判断, 否则可能会崩溃
 	//SpsData1:4, 674d002a
