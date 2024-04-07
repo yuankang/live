@@ -176,10 +176,11 @@ func ParseAudio(s *Stream, pps *PsPacket, r *bytes.Reader) (*PsPacket, error) {
 	ph.PesPacketLength, _ = ReadUint16(r, 2, BE)
 	pps.UseNum += 2
 	//ph.PesPacketLength 表示音频数据长度时 是准确值
-	s.log.Printf("PesPacketLength=%d, audio", ph.PesPacketLength)
+	//s.log.Printf("PesPacketLength=%d, audio", ph.PesPacketLength)
 
-	oph, l := ParseOptPesHeader(s, r)
-	s.log.Printf("%#v", oph)
+	_, l := ParseOptPesHeader(s, r)
+	//oph, l := ParseOptPesHeader(s, r)
+	//s.log.Printf("%#v", oph)
 	pps.UseNum += l
 
 	pp := &PsPacket{}
@@ -194,7 +195,7 @@ func ParseAudio(s *Stream, pps *PsPacket, r *bytes.Reader) (*PsPacket, error) {
 		return nil, err
 	}
 	pps.UseNum += int(dl)
-	s.log.Printf("AudioCodec:%s, DataLen:%d", s.AudioCodecType, len(pp.Data))
+	s.log.Printf("AudioCodec:%s, DataLen:%d, PesPacketLength=%d", s.AudioCodecType, len(pp.Data), ph.PesPacketLength)
 	return pp, nil
 }
 
@@ -229,10 +230,11 @@ func ParseVideo(s *Stream, pps *PsPacket, r *bytes.Reader) (*PsPacket, error) {
 	ph.PesPacketLength, _ = ReadUint16(r, 2, BE)
 	pps.UseNum += 2
 	//ph.PesPacketLength 表示视频数据长度时 不准确或为0 一般不用这个值
-	s.log.Printf("PesPacketLength=%d, video", ph.PesPacketLength)
+	//s.log.Printf("PesPacketLength=%d, video", ph.PesPacketLength)
 
-	oph, l := ParseOptPesHeader(s, r)
-	s.log.Printf("%#v", oph)
+	_, l := ParseOptPesHeader(s, r)
+	//oph, l := ParseOptPesHeader(s, r)
+	//s.log.Printf("%#v", oph)
 	pps.UseNum += l
 
 	pp := &PsPacket{}
@@ -247,7 +249,7 @@ func ParseVideo(s *Stream, pps *PsPacket, r *bytes.Reader) (*PsPacket, error) {
 		return nil, err
 	}
 	pps.UseNum += len(pp.Data)
-	s.log.Printf("VideoCodec:%s, DataLen:%d", s.VideoCodecType, len(pp.Data))
+	s.log.Printf("VideoCodec:%s, DataLen:%d, PesPacketLength=%d", s.VideoCodecType, len(pp.Data), ph.PesPacketLength)
 	return pp, nil
 }
 

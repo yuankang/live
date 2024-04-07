@@ -135,6 +135,37 @@ func RtmpConn(s *Stream) (*Stream, error) {
 }
 
 func AudioHandler(s, sm *Stream, p *PsPacket) error {
+	var ah RtmpAudioDataHeader
+	switch s.AudioCodecType {
+	case "G711a":
+		ah.SoundFormat = 7
+	case "G711u":
+		ah.SoundFormat = 8
+	case "AAC":
+		ah.SoundFormat = 10
+	}
+	ah.SoundRate = 0
+	ah.SoundSize = 0
+	ah.SoundType = 0
+
+	i := 0
+	d := make([]byte, 1+len(p.Data))
+
+	d[i] = ah.SoundFormat<<4 | ah.SoundRate<<2 | ah.SoundSize<<1 | ah.SoundType
+	i++
+	copy(d[i:], p.Data)
+	i += len(p.Data)
+
+	ck := CreateMessage0(MsgTypeIdAudio, uint32(len(d)), d)
+	ck.Csid = 3
+	ck.Timestamp = p.Timestamp / 90
+
+	sm.log.Printf("<-- aLen=%d, aData=%x", len(d), d)
+	err := MessageSplit(sm, ck, false)
+	if err != nil {
+		sm.log.Println(err)
+		return err
+	}
 	return nil
 }
 
@@ -191,9 +222,9 @@ func CreateAvcSequenceHeader(s *Stream, sm *Stream) ([]byte, error) {
 
 	var AvcC AVCDecoderConfigurationRecord
 	AvcC.ConfigurationVersion = 0x01
-	AvcC.AVCProfileIndication = s.SpsData[0]
-	AvcC.ProfileCompatibility = s.SpsData[1]
-	AvcC.AVCLevelIndication = s.SpsData[2]
+	AvcC.AVCProfileIndication = s.SpsData[1]
+	AvcC.ProfileCompatibility = s.SpsData[2]
+	AvcC.AVCLevelIndication = s.SpsData[3]
 	AvcC.Reserved0 = 0x3f
 	AvcC.LengthSizeMinuxOne = 0x3
 	AvcC.Reserved1 = 0x7
@@ -204,7 +235,7 @@ func CreateAvcSequenceHeader(s *Stream, sm *Stream) ([]byte, error) {
 	AvcC.PpsSize = uint16(len(s.PpsData))
 	//AvcC.PpsData = s.PpsData
 
-	var i uint16
+	i := 0
 	d := make([]byte, 5+11+AvcC.SpsSize+AvcC.PpsSize)
 
 	d[i] = rvt.FrameType<<4 | rvt.CodecID
@@ -229,14 +260,14 @@ func CreateAvcSequenceHeader(s *Stream, sm *Stream) ([]byte, error) {
 	Uint16ToByte(AvcC.SpsSize, d[i:i+2], BE)
 	i += 2
 	copy(d[i:], s.SpsData)
-	i += AvcC.SpsSize
+	i += int(AvcC.SpsSize)
 
 	d[i] = AvcC.NumOfPps
 	i++
 	Uint16ToByte(AvcC.PpsSize, d[i:i+2], BE)
 	i += 2
 	copy(d[i:], s.PpsData)
-	i += AvcC.PpsSize
+	i += int(AvcC.PpsSize)
 	return d, nil
 }
 
@@ -291,7 +322,11 @@ func HandleAvcSequenceHeader(s, sm *Stream, p *PsPacket, nis []*NaluInfo) error 
 
 	for i := 0; i < len(nis); i++ {
 		ni = nis[i]
-		sm.log.Printf("i=%d, Type=%s, Len=%d, Num(0x00)=%d, Pos=%d, Data=%x", i, ni.Type, ni.ByteLen, ni.ByteNum, ni.BytePos, ni.Data[:50])
+		if ni.Type == "vps" || ni.Type == "sps" || ni.Type == "pps" || ni.Type == "sei" {
+			sm.log.Printf("i=%d, Type=%s, Len=%d, Num(0x00)=%d, Pos=%d, Data=%x", i, ni.Type, ni.ByteLen, ni.ByteNum, ni.BytePos, ni.Data)
+		} else {
+			sm.log.Printf("i=%d, Type=%s, Len=%d, Num(0x00)=%d, Pos=%d, Data=%x", i, ni.Type, ni.ByteLen, ni.ByteNum, ni.BytePos, ni.Data[:50])
+		}
 
 		switch ni.Type {
 		case "vps":
@@ -300,16 +335,16 @@ func HandleAvcSequenceHeader(s, sm *Stream, p *PsPacket, nis []*NaluInfo) error 
 			}
 			s.VpsChange = true
 			sm.log.Printf("VpsDataOld:%x", s.VpsData)
-			sm.log.Printf("VpsDataNew:%x", ni.Data)
 			s.VpsData = ni.Data
+			sm.log.Printf("VpsDataNew:%x", s.VpsData)
 		case "sps":
 			if utils.SliceEqual(s.SpsData, ni.Data) {
 				continue
 			}
 			s.SpsChange = true
 			sm.log.Printf("SpsDataOld:%x", s.SpsData)
-			sm.log.Printf("SpsDataNew:%x", ni.Data)
 			s.SpsData = ni.Data
+			sm.log.Printf("SpsDataNew:%x", s.SpsData)
 			sps, err := SpsParse0(sm, s.SpsData)
 			if err != nil {
 				sm.log.Println(err)
@@ -325,16 +360,16 @@ func HandleAvcSequenceHeader(s, sm *Stream, p *PsPacket, nis []*NaluInfo) error 
 			}
 			s.PpsChange = true
 			sm.log.Printf("PpsDataOld:%x", s.PpsData)
-			sm.log.Printf("PpsDataNew:%x", ni.Data)
 			s.PpsData = ni.Data
+			sm.log.Printf("PpsDataNew:%x", s.PpsData)
 		case "sei":
 			if utils.SliceEqual(s.SeiData, ni.Data) {
 				continue
 			}
 			s.SeiChange = true
 			sm.log.Printf("SeiDataOld:%x", s.SeiData)
-			sm.log.Printf("SeiDataNew:%x", ni.Data)
 			s.SeiData = ni.Data
+			sm.log.Printf("SeiDataNew:%x", s.SeiData)
 		case "ifrm", "pfrm":
 		default:
 			sm.log.Printf("undefine nalu type")
@@ -353,7 +388,7 @@ func HandleAvcSequenceHeader(s, sm *Stream, p *PsPacket, nis []*NaluInfo) error 
 		ck.Csid = 3
 		ck.Timestamp = p.Timestamp / 90
 
-		sm.log.Printf("MsgLen=%d, MsgData=%x", len(s.AvcSH), s.AvcSH)
+		sm.log.Printf("<-- MsgLen=%d, MsgData=%x", len(s.AvcSH), s.AvcSH)
 		err := MessageSplit(sm, ck, true)
 		if err != nil {
 			sm.log.Println(err)
@@ -407,6 +442,8 @@ func VideoHandler(s, sm *Stream, p *PsPacket) error {
 	ck.Csid = 3
 	ck.Timestamp = p.Timestamp / 90
 
+	//sm.log.Printf("<-- MsgLen=%d, MsgData=%x", len(ds), ds)
+	sm.log.Printf("<-- vLen=%d, vData=%x", len(ds), ds)
 	err = MessageSplit(sm, ck, false)
 	if err != nil {
 		sm.log.Println(err)
@@ -437,7 +474,8 @@ func GbNetPushRtmp(s *Stream) {
 			sm.log.Printf("%s, GbNetPushRtmp() stop", sm.StreamId)
 			break
 		}
-		sm.log.Printf("PsType=%s, PsTs=%d, PsData=%x", p.Type, p.Timestamp, p.Data)
+		//sm.log.Printf("PsType=%s, PsTs=%d, PsLen=%d, PsData=%x", p.Type, p.Timestamp, len(p.Data), p.Data)
+		sm.log.Printf("PsType=%s, PsTs=%d, PsLen=%d", p.Type, p.Timestamp, len(p.Data))
 
 		switch p.Type {
 		case "video":

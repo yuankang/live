@@ -311,10 +311,12 @@ func (p *program) run() {
 	//go PuberLogCutoffTimer() //每天0点分割清理发布者日志
 	//go NetworkTrafficTimer() //流量统计与上报
 
-	go SipServerTcp() //for gb28181
-	go SipServerUdp() //for gb28181
-	go RtpServerTcp() //for gb28181
-	go RtpServerUdp() //for gb28181
+	go SipServerTcp()  //for gb28181
+	go SipServerUdp()  //for gb28181
+	go RtpServerTcp()  //for gb28181
+	go RtpServerUdp()  //for gb28181
+	go RtcpServerTcp() //for gb28181
+	//go RtcpServerUdp() //for gb28181
 	go RtspServer()
 	go RtmpServer()
 

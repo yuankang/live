@@ -64,7 +64,7 @@ func FindAnnexbStartCode1(d []byte, ct string) ([]*NaluInfo, error) {
 	var err error
 	l := len(d)
 	if l < 5 {
-		err = fmt.Errorf("DataLen Must >= 4, data:0x%x", d)
+		err = fmt.Errorf("DataLen Must >= 5, data:0x%x", d)
 		return nil, err
 	}
 
@@ -99,11 +99,39 @@ func FindAnnexbStartCode1(d []byte, ct string) ([]*NaluInfo, error) {
 		}
 		s = nis[i].BytePos + 4
 		e = s + nis[i].ByteLen
-		//log.Printf("nalu %s, start=%d, end=%d", nis[i].Type, s, e)
 		nis[i].Data = d[s:e]
-		//log.Printf("Type=%s, Data=%x", nis[i].Type, nis[i].Data[:4])
+	}
+
+	var ni *NaluInfo
+	for i := 0; i < niNum; i++ {
+		ni = nis[i]
+		if ni.Type == "vps" || ni.Type == "sps" || ni.Type == "pps" || ni.Type == "sei" {
+			ni.Data, _ = FindVideoInfo(ni.Data)
+		}
 	}
 	return nis, nil
+}
+
+//海康摄像头sps/pps/sep尾部会加000001e0开头的数据, 这部分要去掉
+//sps 00000001674d001f9da814016e9b808080a000000300200000065080		000001e0000e8c0003fffffc
+//pps 0000000168ee3c80												000001e0000e8c0002fffc
+//sei 0000000106e501ec80											000001e0e5668c0003fffff8
+func FindVideoInfo(d []byte) ([]byte, error) {
+	var err error
+	l := len(d)
+	if l < 4 {
+		err = fmt.Errorf("DataLen Must >= 4, data:0x%x", d)
+		return nil, err
+	}
+
+	var s, e int
+	for i := 0; i < l-3; i++ {
+		if d[i] == 0x00 && d[i+1] == 0x00 && d[i+2] == 0x01 && d[i+3] == 0xe0 {
+			e = i
+			break
+		}
+	}
+	return d[s:e], nil
 }
 
 //找0x00000001 或 0x000001

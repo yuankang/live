@@ -192,7 +192,7 @@ func GbRtpPktHandler(s *Stream) {
 		} else {
 			s.RtpPktCrtTs = int64(rp.Timestamp)
 		}
-		s.log.Printf("PsPkt type=%s, dLen=%d, PsTs=%d, RtpPktCrtTs=%d ", pp.Type, len(pp.Data), pp.Timestamp, s.RtpPktCrtTs)
+		//s.log.Printf("PsPkt type=%s, dLen=%d, PsTs=%d, RtpPktCrtTs=%d ", pp.Type, len(pp.Data), pp.Timestamp, s.RtpPktCrtTs)
 
 		//通过chan发送给GbNetPushRtmp()
 		err = ParsePs(s, pp)
@@ -239,6 +239,7 @@ func RtpRecvTcp(c net.Conn) {
 			break
 		}
 
+		//TODO: 性能优化, 参考sliveconnproxy
 		d = make([]byte, int(l))
 		_, err = io.ReadFull(c, d)
 		if err != nil {
@@ -270,6 +271,7 @@ func RtpRecvTcp(c net.Conn) {
 			s.log.Printf("rAddr=%s, ssrc=%.10d, streamId=%s", s.RemoteAddr, rp.Ssrc, s.Key)
 			s.log.Printf("%#v", rp.RtpHeader)
 
+			//go GbMemPushRtmp(s)
 			go GbNetPushRtmp(s)
 			go GbRtpPktHandler(s)
 		}
@@ -307,5 +309,63 @@ func RtpServerTcp() {
 		//RemoteAddr: 10.3.214.236:15060 ipc发送视频地址
 		//RemoteAddr: 10.3.214.236:15062 ipc发送音频地址
 		go RtpRecvTcp(c)
+	}
+}
+
+func RtcpRecvTcp(c net.Conn) {
+	var err error
+	var l uint16
+	var d []byte
+	var s *Stream
+
+	for {
+		//tcp会作拆包和粘包的处理, RTP(TCP)有2字节长度信息
+		l, err = ReadUint16(c, 2, BE)
+		if err != nil {
+			log.Println(err)
+			if s != nil {
+				s.log.Println(err)
+				//TODO: 释放资源
+				StreamMap.Delete(s.Key)
+				SsrcMap.Delete(s.RtpSsrcUint)
+			}
+			break
+		}
+
+		//TODO: 性能优化, 参考sliveconnproxy
+		d = make([]byte, int(l))
+		_, err = io.ReadFull(c, d)
+		if err != nil {
+			log.Println(err)
+			break
+		}
+		log.Printf("recv %s rtcp, len=%d, data=%x", c.RemoteAddr().String(), len(d), d)
+	}
+}
+
+func RtcpServerTcp() {
+	addr := fmt.Sprintf(":%d", conf.RtpRtcp.FixedRtcpPort)
+	log.Printf("listen rtcp(tcp) on %s", addr)
+
+	l, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	var c net.Conn
+	for {
+		c, err = l.Accept()
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+		log.Println("------ new rtcp(tcp) connect ------")
+		log.Println("RemoteAddr:", c.RemoteAddr().String())
+
+		//有些ipc的音频和视频数据是通过不同端口发送的,
+		//音频端口建连后会马上断开, 音频数据还是通过视频端口过来
+		//RemoteAddr: 10.3.214.236:15060 ipc发送视频地址
+		//RemoteAddr: 10.3.214.236:15062 ipc发送音频地址
+		go RtcpRecvTcp(c)
 	}
 }

@@ -287,8 +287,9 @@ func ParsePgmStreamInfo(s *Stream, r *bytes.Reader) int {
 			s.VideoCodecType = "H265"
 		default:
 			s.log.Printf("VideoFormat: %x, unknow", sm.StreamType)
+			return n
 		}
-		s.log.Printf("VideoCodecType=%s", s.VideoCodecType)
+		s.log.Printf("VideoCodecType=%s, StreamType=%x, esid=%x, descLen=%d, descData=%x, rLen=%d", s.VideoCodecType, sm.StreamType, sm.ElementaryStreamId, sm.DescriptorLength, sm.DescriptorData, n)
 	}
 	if sm.ElementaryStreamId == 0xc0 {
 		switch sm.StreamType {
@@ -302,11 +303,10 @@ func ParsePgmStreamInfo(s *Stream, r *bytes.Reader) int {
 			s.AudioCodecType = "G711u"
 		default:
 			s.log.Printf("AudioFormat=%x, unknow", sm.StreamType)
+			return n
 		}
-		s.log.Printf("AudioCodecType=%s", s.AudioCodecType)
+		s.log.Printf("AudioCodecType=%s, StreamType=%x, esid=%x, descLen=%d, descData=%x, rLen=%d", s.AudioCodecType, sm.StreamType, sm.ElementaryStreamId, sm.DescriptorLength, sm.DescriptorData, n)
 	}
-
-	s.log.Printf("%#v, rLen=%d", sm, n)
 	return n
 }
 
@@ -347,6 +347,7 @@ func ParsePs(s *Stream, pps *PsPacket) error {
 		}
 		pps.UseNum += 4
 		s.log.Printf("i=%d, StartCode=%#08x", i, sc)
+		i++
 
 		//PS流总是以0x000001BA开始, 以0x000001B9结束
 		//对于PS文件 有且只有一个结束码0x000001B9, 对于直播PS流 没有结束码
@@ -378,7 +379,6 @@ func ParsePs(s *Stream, pps *PsPacket) error {
 		} else {
 			s.log.Printf("PsPktChanLen=%d, MaxLen=%d", len(s.PsPktChan), conf.RtpRtcp.PsPktChanNum)
 		}
-		i++
 	}
 	return nil
 }
