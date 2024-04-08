@@ -117,7 +117,7 @@ func MessageSplit(s *Stream, c *Chunk, flush bool) error {
 	if m != 0 {
 		n++
 	}
-	//s.log.Printf("send times=%d, MsgLen=%d, RmtChunkSize=%d", n, c.MsgLength, s.RemoteChunkSize)
+	//s.log.Printf("SendNum=%d, MsgLen=%d, ChunkSize=%d", n, c.MsgLength, s.RemoteChunkSize)
 
 	c.Fmt = 0
 	MsgDataLen := len(c.MsgData)

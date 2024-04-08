@@ -3,45 +3,8 @@ package main
 import (
 	"fmt"
 	"net"
-	"time"
 	"utils"
 )
-
-func Frame2Chunk(s *Stream, p AvPacket) Chunk {
-	var st time.Time
-	var div time.Duration
-	var nis []NaluInfo
-	var fl int
-	var c Chunk
-
-	if p.Type == "VideoKeyFrame" || p.Type == "VideoInterFrame" {
-		st = time.Now()
-		nis, fl = FindAnnexbStartCode(p.Data)
-		div = time.Since(st)
-		s.log.Printf("DataLen:%d, NaluNum:%d, useTime:%v", len(p.Data), len(nis), div)
-		for i := 0; i < len(nis); i++ {
-			s.log.Printf("NaluIdx:%d, %#v", i, nis[i])
-		}
-
-		//h264的annexB格式: startCode(3/4字节) + NaluData
-		//h264的avcc格式: NaluLen(4字节) + NaluData
-		//rtp(annexb),  rtmp(avcc), flv(avcc)???,  ts(annexb)
-		s.log.Printf("%x", p.Data[:10])
-		p.Data = Annexb2Avcc(p.Data, nis, fl)
-		s.log.Printf("%x", p.Data[:10])
-	}
-
-	//CreateMessage(MsgTypeIdCmdAmf0, uint32(len(d)), d)
-	c.Fmt = 0
-	c.Csid = 3
-	c.Timestamp = p.Timestamp
-	c.MsgLength = uint32(len(p.Data))
-	c.MsgTypeId = MsgTypeIdVideo
-	c.MsgStreamId = 0
-	c.MsgData = p.Data
-	c.DataType = p.Type
-	return c
-}
 
 /*************************************************/
 /* Gb28181媒体数据走内存发送给自己RtmpServer
@@ -160,7 +123,7 @@ func AudioHandler(s, sm *Stream, p *PsPacket) error {
 	ck.Csid = 3
 	ck.Timestamp = p.Timestamp / 90
 
-	sm.log.Printf("<-- aLen=%d, aData=%x", len(d), d)
+	//sm.log.Printf("<-- aLen=%d, aData=%x", len(d), d)
 	err := MessageSplit(sm, ck, false)
 	if err != nil {
 		sm.log.Println(err)
@@ -322,11 +285,12 @@ func HandleAvcSequenceHeader(s, sm *Stream, p *PsPacket, nis []*NaluInfo) error 
 
 	for i := 0; i < len(nis); i++ {
 		ni = nis[i]
-		if ni.Type == "vps" || ni.Type == "sps" || ni.Type == "pps" || ni.Type == "sei" {
-			sm.log.Printf("i=%d, Type=%s, Len=%d, Num(0x00)=%d, Pos=%d, Data=%x", i, ni.Type, ni.ByteLen, ni.ByteNum, ni.BytePos, ni.Data)
-		} else {
-			sm.log.Printf("i=%d, Type=%s, Len=%d, Num(0x00)=%d, Pos=%d, Data=%x", i, ni.Type, ni.ByteLen, ni.ByteNum, ni.BytePos, ni.Data[:50])
+
+		pl := len(ni.Data)
+		if pl > 10 {
+			pl = 10
 		}
+		sm.log.Printf("i=%d, Type=%s, Len=%d, Num(0x00)=%d, Pos=%d, Data=%x", i, ni.Type, ni.ByteLen, ni.ByteNum, ni.BytePos, ni.Data[:pl])
 
 		switch ni.Type {
 		case "vps":
@@ -372,7 +336,7 @@ func HandleAvcSequenceHeader(s, sm *Stream, p *PsPacket, nis []*NaluInfo) error 
 			sm.log.Printf("SeiDataNew:%x", s.SeiData)
 		case "ifrm", "pfrm":
 		default:
-			sm.log.Printf("undefine nalu type")
+			//sm.log.Printf("unknow nalu type")
 		}
 	}
 
@@ -406,7 +370,7 @@ func HandleAvcSequenceHeader(s, sm *Stream, p *PsPacket, nis []*NaluInfo) error 
 //2 依据sps/pps, 生成或更新avc sequence header, 并发送
 //3 依据sei, 生成并发送视频数据 annexB格式转avcc格式
 func VideoHandler(s, sm *Stream, p *PsPacket) error {
-	nis, err := FindAnnexbStartCode1(p.Data, s.VideoCodecType)
+	nis, err := FindAnnexbStartCode(p.Data, s.VideoCodecType)
 	if err != nil {
 		sm.log.Println(err)
 		return err
@@ -423,7 +387,7 @@ func VideoHandler(s, sm *Stream, p *PsPacket) error {
 	var ck *Chunk
 	for i := 0; i < len(nis); i++ {
 		ni = nis[i]
-		if ni.Type == "vps" || ni.Type == "sps" || ni.Type == "pps" || ni.Type == "sei" {
+		if ni.Type == "vps" || ni.Type == "sps" || ni.Type == "pps" || ni.Type == "sei" || ni.Type == "unknow" {
 			continue
 		}
 
@@ -442,8 +406,7 @@ func VideoHandler(s, sm *Stream, p *PsPacket) error {
 	ck.Csid = 3
 	ck.Timestamp = p.Timestamp / 90
 
-	//sm.log.Printf("<-- MsgLen=%d, MsgData=%x", len(ds), ds)
-	sm.log.Printf("<-- vLen=%d, vData=%x", len(ds), ds)
+	//sm.log.Printf("<-- vLen=%d, vData=%x", len(ds), ds[:50])
 	err = MessageSplit(sm, ck, false)
 	if err != nil {
 		sm.log.Println(err)

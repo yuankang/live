@@ -160,8 +160,8 @@ func GbRtpPktHandler(s *Stream) {
 			s.log.Printf("GbRtpPktHandler() stop")
 			break
 		}
-		s.log.Printf("--> RtpLen=%d(0x%x), SeqNum=%d, Pt=%s(%d), Ts=%d, Mark=%d", rp.Len, rp.Len, rp.SeqNum, rp.PtStr, rp.PayloadType, rp.Timestamp, rp.Marker)
-		s.log.Printf("rtpData:%x", rp.Data)
+		//s.log.Printf("--> RtpLen=%d(0x%x), SeqNum=%d, Pt=%s(%d), Ts=%d, Mark=%d", rp.Len, rp.Len, rp.SeqNum, rp.PtStr, rp.PayloadType, rp.Timestamp, rp.Marker)
+		//s.log.Printf("rtpData:%x", rp.Data)
 
 		if s.RtpPktNeedSeq != rp.SeqNum {
 			s.log.Printf("RtpPktNeedSeq(%d) != RtpSeq(%d)", s.RtpPktNeedSeq, rp.SeqNum)

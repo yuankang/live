@@ -346,7 +346,7 @@ func ParsePs(s *Stream, pps *PsPacket) error {
 			return nil
 		}
 		pps.UseNum += 4
-		s.log.Printf("i=%d, StartCode=%#08x", i, sc)
+		//s.log.Printf("i=%d, StartCode=%#08x", i, sc)
 		i++
 
 		//PS流总是以0x000001BA开始, 以0x000001B9结束

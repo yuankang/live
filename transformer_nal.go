@@ -42,13 +42,6 @@ h264的avcc格式		NaluLen(4字节) + NaluData
 h264的annexB格式	startCode(3/4字节) + NaluData
 startCode(3字节)	0x000001
 startCode(4字节)	0x00000001
-
-[leMac:ch00_code]# go run FindAnnexb000001.go
-2023/04/06 16:48:25 9900000001aabbcc000001ddeeff000001
-2023/04/06 16:48:25 0, main.NaluInfo{ByteNum:4, BytePos:1, ByteLen:3}
-2023/04/06 16:48:25 1, main.NaluInfo{ByteNum:3, BytePos:8, ByteLen:3}
-2023/04/06 16:48:25 2, main.NaluInfo{ByteNum:3, BytePos:14, ByteLen:0}
-2023/04/06 16:48:25 14
 */
 type NaluInfo struct {
 	Type    string //vps/sps/pps/sei/ifrm/pfrm
@@ -58,28 +51,61 @@ type NaluInfo struct {
 	ByteLen int    //0x00000001 后面的数据长度, 也就是Data长度
 }
 
-//只找0x00000001
-//ct VideoCodecType, H264, H265
-func FindAnnexbStartCode1(d []byte, ct string) ([]*NaluInfo, error) {
+/*
+2024/04/08 18:44:27 0000000167aaaa0000000168bbbb00000106cccc0000000165dddd
+2024/04/08 18:44:27 Type:sps, Data:67aaaa, Num=4, Pos=0, Len=3, dLen=3
+2024/04/08 18:44:27 Type:pps, Data:68bbbb, Num=4, Pos=7, Len=3, dLen=3
+2024/04/08 18:44:27 Type:sei, Data:06cccc, Num=3, Pos=14, Len=3, dLen=3
+2024/04/08 18:44:27 Type:ifrm, Data:65dddd, Num=4, Pos=20, Len=3, dLen=3
+
+2024/04/08 18:43:53 6600000167aaaa0000000168bbbb00000106cccc0000000165dddd000001
+2024/04/08 18:43:53 Type:sps, Data:67aaaa, Num=3, Pos=1, Len=3, dLen=3
+2024/04/08 18:43:53 Type:pps, Data:68bbbb, Num=4, Pos=7, Len=3, dLen=3
+2024/04/08 18:43:53 Type:sei, Data:06cccc, Num=3, Pos=14, Len=3, dLen=3
+2024/04/08 18:43:53 Type:ifrm, Data:65dddd, Num=4, Pos=20, Len=3, dLen=3
+2024/04/08 18:43:53 Type:unknow, Data:, Num=3, Pos=27, Len=0, dLen=0
+*/
+//找 0x00000001 或 0x000001
+//海康摄像头sps/pps/sep尾部会加000001e0开头的数据, 这部分要去掉
+//sps 00000001674d001f9da814016e9b808080a000000300200000065080000001e0000e8c0003fffffc
+//pps 0000000168ee3c80000001e0000e8c0002fffc
+//sei 0000000106e501ec80000001e0e5668c0003fffff8
+//海康摄像头ifrm尾部会加000001bd开头的数据, 这部分要去掉 否则播放正常但报"Invalid NAL unit 0"
+//ifrm 0000000165xxx + 000001bdxxx, 海康私有标识 丢弃后看不到视频里移动侦测的红框
+//pfrm 后面没有加 000001bdxxx
+func FindAnnexbStartCode(d []byte, ct string) ([]*NaluInfo, error) {
 	var err error
 	l := len(d)
-	if l < 5 {
-		err = fmt.Errorf("DataLen Must >= 5, data:0x%x", d)
+	if l < 3 {
+		err = fmt.Errorf("NaluDataLen Must >= 3, data:0x%x", d)
 		return nil, err
 	}
 
 	var nis []*NaluInfo
-	for i := 0; i < l-3; i++ {
-		if d[i] == 0x00 && d[i+1] == 0x00 && d[i+2] == 0x00 && d[i+3] == 0x01 {
+	for i := 0; i < l-2; i++ {
+		//找0x000001, 找到之后看左边是不是0x00
+		if d[i] == 0x00 && d[i+1] == 0x00 && d[i+2] == 0x01 {
 			ni := &NaluInfo{}
 			ni.BytePos = i
-			ni.ByteNum = 4
+			ni.ByteNum = 3
+			if i > 0 && d[i-1] == 0x00 {
+				ni.BytePos = i - 1
+				ni.ByteNum = 4
+			}
 
+			//0x000001出现在尾部时, 赋默认值 否则为空
+			ni.Type = "unknow"
 			switch ct {
 			case "H264":
-				ni.Type = GetNaluTypeH264(d[i+4 : i+5])
+				//0x000001出现在尾部时, 防止崩溃
+				if l-i > 3 {
+					ni.Type = GetNaluTypeH264(d[i+3 : i+4])
+				}
 			case "H265":
-				ni.Type = GetNaluTypeH265(d[i+4 : i+6])
+				//0x000001出现在尾部时, 防止崩溃
+				if l-i > 4 {
+					ni.Type = GetNaluTypeH265(d[i+3 : i+5])
+				}
 			default:
 				err = fmt.Errorf("undefined VideoCodecType %s", ct)
 				return nil, err
@@ -97,83 +123,11 @@ func FindAnnexbStartCode1(d []byte, ct string) ([]*NaluInfo, error) {
 		} else {
 			nis[i].ByteLen = nis[i+1].BytePos - nis[i].BytePos - nis[i].ByteNum
 		}
-		s = nis[i].BytePos + 4
+		s = nis[i].BytePos + nis[i].ByteNum
 		e = s + nis[i].ByteLen
 		nis[i].Data = d[s:e]
 	}
-
-	var ni *NaluInfo
-	for i := 0; i < niNum; i++ {
-		ni = nis[i]
-		if ni.Type == "vps" || ni.Type == "sps" || ni.Type == "pps" || ni.Type == "sei" {
-			ni.Data, _ = FindVideoInfo(ni.Data)
-		}
-	}
 	return nis, nil
-}
-
-//海康摄像头sps/pps/sep尾部会加000001e0开头的数据, 这部分要去掉
-//sps 00000001674d001f9da814016e9b808080a000000300200000065080		000001e0000e8c0003fffffc
-//pps 0000000168ee3c80												000001e0000e8c0002fffc
-//sei 0000000106e501ec80											000001e0e5668c0003fffff8
-func FindVideoInfo(d []byte) ([]byte, error) {
-	var err error
-	l := len(d)
-	if l < 4 {
-		err = fmt.Errorf("DataLen Must >= 4, data:0x%x", d)
-		return nil, err
-	}
-
-	var s, e int
-	for i := 0; i < l-3; i++ {
-		if d[i] == 0x00 && d[i+1] == 0x00 && d[i+2] == 0x01 && d[i+3] == 0xe0 {
-			e = i
-			break
-		}
-	}
-	return d[s:e], nil
-}
-
-//找0x00000001 或 0x000001
-func FindAnnexbStartCode(d []byte) ([]NaluInfo, int) {
-	l := len(d)
-	if l < 3 {
-		log.Printf("DataLen Must >= 3, data:0x%x", d)
-		return nil, 0
-	}
-
-	var nis []NaluInfo
-	var ni NaluInfo
-	var fl int
-
-	//找0x000001, 找到之后看左边是不是0x00
-	for i := 0; i < l-2; i++ {
-		if d[i] == 0x00 && d[i+1] == 0x00 && d[i+2] == 0x01 {
-			ni.BytePos = i
-			ni.ByteNum = 3
-			if i > 0 && d[i-1] == 0x00 {
-				ni.BytePos = i - 1
-				ni.ByteNum = 4
-			}
-			nis = append(nis, ni)
-		}
-	}
-
-	niNum := len(nis)
-	for i := 0; i < niNum; i++ {
-		if i+1 == niNum {
-			nis[i].ByteLen = l - nis[i].BytePos - nis[i].ByteNum
-		} else {
-			nis[i].ByteLen = nis[i+1].BytePos - nis[i].BytePos - nis[i].ByteNum
-		}
-		fl += nis[i].ByteLen
-	}
-	if nis[niNum-1].ByteLen == 0 {
-		fl += (niNum - 1) * 4
-	} else {
-		fl += niNum * 4
-	}
-	return nis, fl
 }
 
 func GetNaluTypeH264(d []byte) string {
