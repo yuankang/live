@@ -75,9 +75,6 @@ type GbPub struct {
 	RtpTsCurt   uint32   //当前rtp包的时间戳
 	RtpPkgCache sync.Map //期待rtp序号为10的包, 来了序号为11的包, 要先缓存上
 
-	FrameRtp //存放相同时间戳(一个视频帧)的多个rtp包
-	AvPacket //存放FrameRtp拼成的音视频帧
-
 	AhcFlag bool //AudioHeaderChangeFlag
 	VhcFlag bool //VideoHeaderChangeFlag
 }

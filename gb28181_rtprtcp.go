@@ -8,6 +8,19 @@ import (
 	"net"
 )
 
+func PrintList(s *Stream, l *list.List) {
+	s.log.Println(">>>>>> print list <<<<<<")
+	var rp *RtpPacket
+	var i int
+
+	for e := l.Front(); e != nil; e = e.Next() {
+		rp = (e.Value).(*RtpPacket)
+		s.log.Printf("Seq=%d, Mark=%d, Ts=%d", rp.SeqNum, rp.Marker, rp.Timestamp)
+		i++
+	}
+	s.log.Printf("list node num is %d", i)
+}
+
 /*************************************************/
 /* gb28181中rtp数据封包说明
 /*************************************************/
@@ -23,8 +36,8 @@ import (
 //一般 tcp的rtp放的下一个音频帧, udp的rtp可能放不下
 //音视频 包结构 也可能是 (需观察确认)
 //rtpHeader+psHeader+PesHeader+ES(vFrame)+PesHeader+ES(aFrame)
-//vFrame可能是h264/h265
-//aFrame可能是G711a/AAC
+//vFrame可以是h264/h265
+//aFrame可以是G711a/AAC
 
 //rtp(tcp)包 一般长度为1412, 为uint16, 最大值为65536
 //rtp(udp)包 一般长度为1400, 不能大于MTU(一般为1500)
@@ -38,14 +51,6 @@ import (
 /*************************************************/
 /* RtpData2RtmpMessage
 /*************************************************/
-//存放相同时间戳 一个视频帧 的多个rtp包
-type FrameRtp struct {
-	Type    string      //帧类型, 同FrameType
-	DataLen int         //帧数据实际长度, 视频可能为0
-	RecvLen int         //帧数据实收长度
-	RtpPkgs []RtpPacket //多个时间戳相同的rtp包
-}
-
 //TODO: 有些ipc可能从P帧或音频开始发送 这些数据最好扔掉
 func RtpPktList2PsPkt(s *Stream) (*PsPacket, error) {
 	var err error
@@ -146,6 +151,11 @@ func RtpServerUdp() {
 }
 
 /*************************************************/
+/* rtcp udp
+/*************************************************/
+//TODO
+
+/*************************************************/
 /* rtp tcp
 /*************************************************/
 func GbRtpPktHandler(s *Stream) {
@@ -202,25 +212,12 @@ func GbRtpPktHandler(s *Stream) {
 	}
 }
 
-func PrintList(s *Stream, l *list.List) {
-	s.log.Println(">>>>>> print list <<<<<<")
-	var rp *RtpPacket
-	var i int
-
-	for e := l.Front(); e != nil; e = e.Next() {
-		rp = (e.Value).(*RtpPacket)
-		s.log.Printf("Seq=%d, Mark=%d, Ts=%d", rp.SeqNum, rp.Marker, rp.Timestamp)
-		i++
-	}
-	s.log.Printf("list node num is %d", i)
-}
-
 //1 接收rtp包, 使用list暂存rtp包
 //2 rtp包组成ps包, 解析ps/pes提取音视频数据
 //3 音视频数据按rtmp格式封装并发送
 func RtpRecvTcp(c net.Conn) {
 	var err error
-	var l uint16
+	var i, l, n uint16
 	var d []byte
 	var rp *RtpPacket
 	var s *Stream
@@ -238,6 +235,10 @@ func RtpRecvTcp(c net.Conn) {
 			}
 			break
 		}
+		n = 30
+		if n > l {
+			n = l
+		}
 
 		//TODO: 性能优化, 参考sliveconnproxy
 		d = make([]byte, int(l))
@@ -249,14 +250,16 @@ func RtpRecvTcp(c net.Conn) {
 
 		rp = RtpParse(d)
 		if s != nil && rp.Ssrc != s.RtpSsrcUint {
-			s.log.Printf("RtpSsrc=%.10d != MySsrc=%.10d, drop this RtpPkt", rp.Ssrc, s.RtpSsrcUint)
+			//TODO 有些摄像头发送数据会错乱, 我们可以从数据中找ssrc值的位置, 来定位正常数据的开始
+			s.log.Printf("i=%d, l=%d, RtpData=%x, RtpSsrc=%.10d != CcSsrc=%.10d, drop RtpPkt", i, l, d[:n], rp.Ssrc, s.RtpSsrcUint)
+			i++
 			continue
 		}
 
 		if s == nil {
 			s, err = SsrcFindStream(rp.Ssrc)
 			if err != nil {
-				log.Println(err)
+				log.Printf("IpcAddr:%s, err:%s", c.RemoteAddr().String(), err)
 				break
 			}
 
@@ -275,7 +278,9 @@ func RtpRecvTcp(c net.Conn) {
 			go GbNetPushRtmp(s)
 			go GbRtpPktHandler(s)
 		}
-		//s.log.Printf("RtpLen=%d(0x%x), SeqNum=%d, Pt=%s(%d), Ts=%d, Mark=%d", rp.Len, rp.Len, rp.SeqNum, rp.PtStr, rp.PayloadType, rp.Timestamp, rp.Marker)
+		//s.log.Printf("i=%d, RtpLen=%d(0x%x), SeqNum=%d, Pt=%s(%d), Ts=%d, Mark=%d", i, rp.Len, rp.Len, rp.SeqNum, rp.PtStr, rp.PayloadType, rp.Timestamp, rp.Marker)
+		s.log.Printf("i=%d, l=%d, RtpData=%x, RtpSsrc=%.10d", i, l, d[:n], rp.Ssrc)
+		i++
 
 		if len(s.RtpPktChan) < conf.RtpRtcp.RtpPktChanNum {
 			s.RtpPktChan <- rp
@@ -312,6 +317,9 @@ func RtpServerTcp() {
 	}
 }
 
+/*************************************************/
+/* rtcp tcp
+/*************************************************/
 func RtcpRecvTcp(c net.Conn) {
 	var err error
 	var l uint16

@@ -81,36 +81,36 @@ type HVCCNALUnit struct {
 	NaluData          []byte // NaluLen个byte
 }
 
-//TODO: 在哪个文档中定义呢???
+// See ISO/IEC 14496-15 最新版
 type HEVCDecoderConfigurationRecord struct {
-	ConfigurationVersion             uint8         // 8bit, 0x01
-	GeneralProfileSpace              uint8         // 2bit
+	ConfigurationVersion             uint8         // 8bit, 0x01, 配置版本号，表示该HEVC解码器配置记录的版本
+	GeneralProfileSpace              uint8         // 2bit,
 	GeneralTierFlag                  uint8         // 1bit
 	GeneralProfileIdc                uint8         // 5bit
 	GeneralProfileCompatibilityFlags uint32        // 32bit
 	GeneralConstraintIndicatorFlags  uint64        // 48bit
-	GeneralLevelIdc                  uint8         // 8bit
+	GeneralLevelIdc                  uint8         // 8bit, 描述HEVC主体编码配置的level IDC
 	Reserved0                        uint8         // 4bit, 1111b
-	MinSpatialSegmentationIdc        uint16        // 12bit
+	MinSpatialSegmentationIdc        uint16        // 12bit, 最小空间分割 IDC
 	Reserved1                        uint8         // 6bit, 111111b
-	ParallelismType                  uint8         // 2bit
+	ParallelismType                  uint8         // 2bit, 并行类型，描述视频并行性类型
 	Reserved2                        uint8         // 6bit, 111111b
-	ChromaFormat                     uint8         // 2bit
+	ChromaFormat                     uint8         // 2bit, 色度格式，描述视频的色度子样本的格式
 	Reserved3                        uint8         // 5bit, 11111b
-	BitDepthLumaMinus8               uint8         // 3bit
+	BitDepthLumaMinus8               uint8         // 3bit, 亮度位深度减8
 	Reserved4                        uint8         // 5bit, 11111b
-	BitDepthChromaMinus8             uint8         // 3it
-	AvgFrameRate                     uint16        // 16bit
-	ConstantFrameRate                uint8         // 2bit
-	NumTemporalLayers                uint8         // 3bit
-	TemporalIdNested                 uint8         // 1bit
-	LengthSizeMinusOne               uint8         // 2bit
-	NumOfArrays                      uint8         // 8bit, 前面共22字节
+	BitDepthChromaMinus8             uint8         // 3it, 色度位深度减8
+	AvgFrameRate                     uint16        // 16bit, 平均帧率，描述视频的平均帧率
+	ConstantFrameRate                uint8         // 2bit, 是否使用恒定帧率
+	NumTemporalLayers                uint8         // 3bit, 时间层数量
+	TemporalIdNested                 uint8         // 1bit, 是否嵌套时序ID
+	LengthSizeMinusOne               uint8         // 2bit, 长度大小减一，用于描述NAL单元长度编码的大小
+	NumOfArrays                      uint8         // 8bit, 数组数量，描述了HEVC解码器配置中的数组数量, 前面共22字节
 	Array                            []HVCCNALUnit // vps，sps，pps 在这里
-	Vps                              []HVCCNALUnit
-	Sps                              []HVCCNALUnit
-	Pps                              []HVCCNALUnit
-	Sei                              []HVCCNALUnit
+	Vps                              []HVCCNALUnit //协议中无, 方便处理
+	Sps                              []HVCCNALUnit //协议中无, 方便处理
+	Pps                              []HVCCNALUnit //协议中无, 方便处理
+	Sei                              []HVCCNALUnit //协议中无, 方便处理
 }
 
 /*************************************************/

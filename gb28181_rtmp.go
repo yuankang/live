@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	"net"
 	"utils"
@@ -176,6 +177,73 @@ type RtmpVideoTag struct {
 	Data            []byte //5+nByte
 }
 
+func CreateHevcSequenceHeader(s *Stream, sm *Stream) ([]byte, error) {
+	var rvt RtmpVideoTag
+	rvt.FrameType = 1
+	rvt.CodecID = 7
+	rvt.AVCPacketType = 0
+	rvt.CompositionTime = 0
+
+	//前5个字节上面已经处理，HEVC sequence header从第6个字节开始
+	//1c 00 00 00 00
+	//01 01 60 00 00 00 80 00 00 00
+	//00 00 78 f0 00 fc fd f8 f8 00
+	//00 ff 03 20 00 01 00 17 40 01
+	//0c 01 ff ff 01 60 00 00 03 00
+	//80 00 00 03 00 00 03 00 78 ac
+	//09 21 00 01 00 3c 42 01 01 01
+	//60 00 00 03 00 80 00 00 03 00
+	//00 03 00 78 a0 02 80 80 2d 1f
+	//e3 6b bb c9 2e b0 16 e0 20 20
+	//20 80 00 01 f4 00 00 30 d4 39
+	//0e f7 28 80 3d 30 00 44 de 00
+	//7a 60 00 89 bc 40 22 00 01 00
+	//09 44 01 c1 72 b0 9c 38 76 24
+	hc := HEVCDecoderConfigurationRecord{
+		ConfigurationVersion:             1,
+		GeneralProfileSpace:              0,
+		GeneralTierFlag:                  0,
+		GeneralProfileIdc:                1,
+		GeneralProfileCompatibilityFlags: 0,
+		GeneralConstraintIndicatorFlags:  0,
+		GeneralLevelIdc:                  30,
+		MinSpatialSegmentationIdc:        0,
+		ParallelismType:                  0,
+		ChromaFormat:                     1,
+		BitDepthLumaMinus8:               0,
+		BitDepthChromaMinus8:             0,
+		AvgFrameRate:                     0,
+		ConstantFrameRate:                0,
+		NumTemporalLayers:                0,
+		TemporalIdNested:                 0,
+		LengthSizeMinusOne:               3,
+		NumOfArrays:                      0,
+	}
+
+	i := 0
+	d := make([]byte, 5+11)
+
+	d[i] = rvt.FrameType<<4 | rvt.CodecID
+	i++
+	d[i] = rvt.AVCPacketType
+	i++
+	Uint24ToByte(rvt.CompositionTime, d[i:i+3], BE)
+	i += 3
+
+	d[i] = hc.ConfigurationVersion
+	d[i] = (hc.GeneralProfileSpace << 6) | (hc.GeneralTierFlag << 5) | hc.GeneralProfileIdc
+	binary.BigEndian.PutUint32(d[i:], hc.GeneralProfileCompatibilityFlags)
+	binary.BigEndian.PutUint64(d[i:], hc.GeneralConstraintIndicatorFlags)
+	d[i] = hc.GeneralLevelIdc
+	binary.BigEndian.PutUint16(d[i:], hc.MinSpatialSegmentationIdc)
+	d[i] = (hc.ParallelismType << 6) | (hc.ChromaFormat << 2) | (hc.BitDepthLumaMinus8 >> 1)
+	//d[i] = ((hc.BitDepthLumaMinus8 & 0x01) << 7) | (hc.BitDepthChromaMinus8 << 3) | (hc.AvgFrameRate >> 8)
+	d[i] = byte(hc.AvgFrameRate)
+	d[i] = (hc.ConstantFrameRate << 6) | (hc.NumTemporalLayers << 3) | (hc.TemporalIdNested << 2) | (hc.LengthSizeMinusOne >> 1)
+	d[i] = ((hc.LengthSizeMinusOne & 0x01) << 7) | hc.NumOfArrays
+	return d, nil
+}
+
 func CreateAvcSequenceHeader(s *Stream, sm *Stream) ([]byte, error) {
 	var rvt RtmpVideoTag
 	rvt.FrameType = 1
@@ -282,11 +350,12 @@ func CreateAvcFrame(sm *Stream, ft int, ni *NaluInfo, sei []byte) []byte {
 func HandleAvcSequenceHeader(s, sm *Stream, p *PsPacket, nis []*NaluInfo) error {
 	var ni *NaluInfo
 	var ck *Chunk
+	var pl int
 
 	for i := 0; i < len(nis); i++ {
 		ni = nis[i]
 
-		pl := len(ni.Data)
+		pl = len(ni.Data)
 		if pl > 10 {
 			pl = 10
 		}
@@ -346,13 +415,17 @@ func HandleAvcSequenceHeader(s, sm *Stream, p *PsPacket, nis []*NaluInfo) error 
 		sm.log.Printf("VpsChange=%t, SpsChange=%t, PpsChange=%t", s.VpsChange, s.SpsChange, s.PpsChange)
 
 		//TODO 这里要区分h264 h265
-		s.AvcSH, _ = CreateAvcSequenceHeader(s, sm)
+		if s.VideoCodecType == "H264" {
+			s.AvcSH, _ = CreateAvcSequenceHeader(s, sm)
+		} else {
+			s.AvcSH, _ = CreateHevcSequenceHeader(s, sm)
+		}
 
 		ck = CreateMessage0(MsgTypeIdVideo, uint32(len(s.AvcSH)), s.AvcSH)
 		ck.Csid = 3
 		ck.Timestamp = p.Timestamp / 90
 
-		sm.log.Printf("<-- MsgLen=%d, MsgData=%x", len(s.AvcSH), s.AvcSH)
+		sm.log.Printf("<-- SeqHeadLen=%d, SeqHeadData=%x", len(s.AvcSH), s.AvcSH)
 		err := MessageSplit(sm, ck, true)
 		if err != nil {
 			sm.log.Println(err)

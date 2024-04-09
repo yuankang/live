@@ -202,25 +202,6 @@ func ParseAudio(s *Stream, pps *PsPacket, r *bytes.Reader) (*PsPacket, error) {
 /*************************************************/
 /* pes video
 /*************************************************/
-func ParseVideoTrailing(s *Stream, r *bytes.Reader, rp *RtpPacket) (int, error) {
-	/*
-		d, err := ioutil.ReadAll(r)
-		if err != nil {
-			s.log.Println(err)
-			return 0, err
-		}
-		l := len(d)
-
-		rp.EsIdx = rp.UseNum
-		rp.UseNum += uint16(l)
-
-		s.FrameRtp.RecvLen += l
-		s.FrameRtp.RtpPkgs = append(s.FrameRtp.RtpPkgs, *rp)
-		return l, nil
-	*/
-	return 0, nil
-}
-
 func ParseVideo(s *Stream, pps *PsPacket, r *bytes.Reader) (*PsPacket, error) {
 	var err error
 	var ph PesHeader
@@ -280,10 +261,8 @@ func VideoHandlerH264(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
 	switch nh.NaluType {
 	case 1: //P帧
 		psp.Type = "VideoInterFrame"
-		s.FrameRtp.Type = "VideoInterFrame"
 	case 5: //IDR
 		psp.Type = "VideoKeyFrame"
-		s.FrameRtp.Type = "VideoKeyFrame"
 	case 6: //SEI
 		psp.Type = "VideoKeyFrame"
 		s.log.Printf("NaluType:SEI")
@@ -328,10 +307,8 @@ func VideoHandlerH265(s *Stream, psp *PsPacket, r *bytes.Reader) (int, error) {
 	switch nh.NalUnitType {
 	case 1: //P帧
 		psp.Type = "VideoInterFrame"
-		s.FrameRtp.Type = "VideoInterFrame"
 	case 19: //IDR
 		psp.Type = "VideoKeyFrame"
-		s.FrameRtp.Type = "VideoKeyFrame"
 	case 32: //VPS
 		psp.Type = "VideoKeyFrame"
 		s.log.Printf("NaluType:VPS")

@@ -131,22 +131,22 @@ func FindAnnexbStartCode(d []byte, ct string) ([]*NaluInfo, error) {
 }
 
 func GetNaluTypeH264(d []byte) string {
-	var nh NaluHeader
+	nh := NaluHeader{}
 	nh.ForbiddenZeroBit = (d[0] >> 7) & 0x1
 	nh.NalRefIdc = (d[0] >> 5) & 0x3
 	nh.NaluType = (d[0] >> 0) & 0x1f
 	//log.Printf("%#v", nh)
 
 	switch nh.NaluType {
-	case 1: //P帧
+	case 1:
 		return "pfrm"
-	case 5: //IDR
+	case 5:
 		return "ifrm"
-	case 6: //SEI
+	case 6:
 		return "sei"
-	case 7: //SPS
+	case 7:
 		return "sps"
-	case 8: //PPS
+	case 8:
 		return "pps"
 	default:
 		return "unknow"
@@ -163,21 +163,21 @@ func GetNaluTypeH265(d []byte) string {
 	//log.Printf("%#v", nh)
 
 	switch nh.NalUnitType {
-	case 1: //P帧
+	case 1:
 		return "pfrm"
-	case 19: //IDR
+	case 19:
 		return "ifrm"
-	case 32: //VPS
+	case 32:
 		return "vps"
-	case 33: //SPS
+	case 33:
 		return "sps"
-	case 34: //PPS
+	case 34:
 		return "pps"
-	case 35: //AUD
+	case 35:
 		return "aud"
-	case 39: //SEI
+	case 39: //???
 		return "seipre"
-	case 40: //SEI
+	case 40: //???
 		return "seisuf"
 	default:
 		return "unknow"
