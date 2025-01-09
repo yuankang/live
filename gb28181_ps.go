@@ -37,6 +37,7 @@ type PsHeader struct {
 }
 
 func ParsePsHeader(s *Stream, pps *PsPacket, r *bytes.Reader) (int, error) {
+	s.log.Println("--->> ParsePsHeader start")
 	var ph PsHeader
 	var n int
 
@@ -98,8 +99,9 @@ func ParsePsHeader(s *Stream, pps *PsPacket, r *bytes.Reader) (int, error) {
 	}
 	n += int(ph.PackStuffingLength)
 
-	//s.log.Printf("%#v, rLen=%d", ph, n)
+	s.log.Printf("%#v, rLen=%d", ph, n)
 	pps.UseNum += n
+	s.log.Println("--->> ParsePsHeader stop")
 	return n, nil
 }
 
@@ -138,6 +140,7 @@ type PsSysBound struct {
 }
 
 func ParsePsSysHeader(s *Stream, pps *PsPacket, r *bytes.Reader) (int, error) {
+	s.log.Println("--->> ParsePsSysHeader start")
 	var psh PsSystemHeader
 	var n int
 
@@ -179,8 +182,9 @@ func ParsePsSysHeader(s *Stream, pps *PsPacket, r *bytes.Reader) (int, error) {
 		psh.PStdBufferSizeBound = (b16 >> 0) & 0x1fff
 	*/
 
-	//s.log.Printf("%#v, rLen=%d", psh, n)
+	s.log.Printf("%#v, rLen=%d", psh, n)
 	pps.UseNum += n
+	s.log.Println("--->> ParsePsSysHeader stop")
 	return n, nil
 }
 
@@ -225,6 +229,7 @@ type PgmStreamInfo struct {
 }
 
 func ParsePgmStreamMap(s *Stream, pps *PsPacket, r *bytes.Reader) (int, error) {
+	s.log.Println("--->> ParsePgmStreamMap start")
 	var psm PgmStreamMap
 	var n int
 
@@ -258,8 +263,9 @@ func ParsePgmStreamMap(s *Stream, pps *PsPacket, r *bytes.Reader) (int, error) {
 	psm.CRC32, _ = ReadUint32(r, 4, BE)
 	n += 4
 
-	//s.log.Printf("%#v, rLen=%d", psm, n)
+	s.log.Printf("%#v, rLen=%d", psm, n)
 	pps.UseNum += n
+	s.log.Println("--->> ParsePgmStreamMap stop")
 	return n, nil
 }
 

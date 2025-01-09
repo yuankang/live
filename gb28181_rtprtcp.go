@@ -235,10 +235,6 @@ func RtpRecvTcp(c net.Conn) {
 			}
 			break
 		}
-		n = 30
-		if n > l {
-			n = l
-		}
 
 		//TODO: 性能优化, 参考sliveconnproxy
 		d = make([]byte, int(l))
@@ -249,6 +245,12 @@ func RtpRecvTcp(c net.Conn) {
 		}
 
 		rp = RtpParse(d)
+		n = 100
+		if n > l {
+			n = l
+		}
+		log.Printf("i=%d, RtpLen=%d(0x%x), SeqNum=%d, Pt=%s(%d), Ts=%d, Mark=%d, RtpData=%x", i, rp.Len, rp.Len, rp.SeqNum, rp.PtStr, rp.PayloadType, rp.Timestamp, rp.Marker, d[:n])
+
 		if s != nil && rp.Ssrc != s.RtpSsrcUint {
 			//TODO 有些摄像头发送数据会错乱, 我们可以从数据中找ssrc值的位置, 来定位正常数据的开始
 			s.log.Printf("i=%d, l=%d, RtpData=%x, RtpSsrc=%.10d != CcSsrc=%.10d, drop RtpPkt", i, l, d[:n], rp.Ssrc, s.RtpSsrcUint)
@@ -278,8 +280,6 @@ func RtpRecvTcp(c net.Conn) {
 			go GbNetPushRtmp(s)
 			go GbRtpPktHandler(s)
 		}
-		//s.log.Printf("i=%d, RtpLen=%d(0x%x), SeqNum=%d, Pt=%s(%d), Ts=%d, Mark=%d", i, rp.Len, rp.Len, rp.SeqNum, rp.PtStr, rp.PayloadType, rp.Timestamp, rp.Marker)
-		s.log.Printf("i=%d, l=%d, RtpData=%x, RtpSsrc=%.10d", i, l, d[:n], rp.Ssrc)
 		i++
 
 		if len(s.RtpPktChan) < conf.RtpRtcp.RtpPktChanNum {

@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"sync"
 	"syscall"
-	"utils"
+	utils "utilsGIT"
 
 	//调试时使用，线上最好关闭
 	//_ "net/http/pprof"
@@ -21,7 +21,7 @@ import (
 const (
 	AppName    = "sms"
 	AppVersion = "0.0.1"
-	AppConf    = "/usr/local/sms/sms.json"
+	AppConf    = "/usr/local/slivegateway/sms.json"
 	BackDoor   = "owner=Spy2023Zjr"
 )
 

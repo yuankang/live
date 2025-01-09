@@ -359,8 +359,7 @@ func GB28181Start(w http.ResponseWriter, r *http.Request, d []byte) ([]byte, err
 	s.GbRqst.RemoteIp = rqst.RemoteIp
 	s.GbRqst.RemoteVideoPort = rqst.RemoteVideoPort
 	s.GbRqst.RemoteAudioPort = rqst.RemoteAudioPort
-	s.log.Printf("%#v", rqst)
-	//s.log.Printf("%#v", s.GbRqst)
+	s.log.Printf("%#v", s.GbRqst)
 
 	if s.GbRqst.RtpSsrcTmp != s.GbRqst.RtpSsrc {
 		SsrcMap.Delete(s.GbRqst.RtpSsrcUintTmp)

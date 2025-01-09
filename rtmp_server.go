@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"utils"
+	utils "utilsGIT"
 )
 
 /*************************************************/
