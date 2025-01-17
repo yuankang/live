@@ -1250,31 +1250,31 @@ func PesHeaderCreate(s *Stream, c Chunk) (*PesHeader, []byte) {
 	case MsgTypeIdVideo: //9
 		pes.StreamId = VideoStreamId
 	}
-	pes.PtsDtsFlags = 0x2 //只有PTS, 40bit
+	pes.Oph.PtsDtsFlags = 0x2 //只有PTS, 40bit
 	pes.PesPacketLength = 3 + 5
-	pes.PesHeaderDataLength = 5
+	pes.Oph.PesHeaderDataLength = 5
 	if pts != dts {
-		pes.PtsDtsFlags = 0x3 // 有PTS 有DTS, 40bit + 40bit
+		pes.Oph.PtsDtsFlags = 0x3 // 有PTS 有DTS, 40bit + 40bit
 		pes.PesPacketLength = 3 + 10
-		pes.PesHeaderDataLength = 10
+		pes.Oph.PesHeaderDataLength = 10
 	}
 
 	//var oPesHeader OptionalPesHeader
-	if pes.PesHeaderDataLength != 0 {
-		pes.FixedValue0 = 0x2
-		pes.PesScramblingControl = 0x0
-		pes.PesPriority = 0x0
-		pes.DataAlignmentIndicator = 0x0
-		pes.Copyright = 0x0
-		pes.OriginalOrCopy = 0x0
-		//pes.PtsDtsFlags = 0
-		pes.EscrFlag = 0x0
-		pes.EsRateFlag = 0x0
-		pes.DsmTrickModeFlag = 0x0
-		pes.AdditionalCopyInfoFlag = 0x0
-		pes.PesCrcFlag = 0x0
-		pes.PesExtensionFlag = 0x0
-		//pes.PesHeaderDataLength
+	if pes.Oph.PesHeaderDataLength != 0 {
+		pes.Oph.FixedValue0 = 0x2
+		pes.Oph.PesScramblingControl = 0x0
+		pes.Oph.PesPriority = 0x0
+		pes.Oph.DataAlignmentIndicator = 0x0
+		pes.Oph.Copyright = 0x0
+		pes.Oph.OriginalOrCopy = 0x0
+		//pes.Oph.PtsDtsFlags = 0
+		pes.Oph.EscrFlag = 0x0
+		pes.Oph.EsRateFlag = 0x0
+		pes.Oph.DsmTrickModeFlag = 0x0
+		pes.Oph.AdditionalCopyInfoFlag = 0x0
+		pes.Oph.PesCrcFlag = 0x0
+		pes.Oph.PesExtensionFlag = 0x0
+		//pes.Oph.PesHeaderDataLength
 	}
 	pes.Pts = pts
 	pes.Dts = dts
@@ -1295,34 +1295,34 @@ func PesHeaderCreate(s *Stream, c Chunk) (*PesHeader, []byte) {
 	//后续用 SetPesPakcetLength() 重新赋值
 	pes.PesPacketLength = 0x0
 	Uint16ToByte(pes.PesPacketLength, pesData[4:6], BE)
-	pesData[6] = ((pes.FixedValue0 & 0x3) << 6) | ((pes.PesScramblingControl & 0x3) << 4) | ((pes.PesPriority & 0x1) << 3) | ((pes.DataAlignmentIndicator & 0x1) << 2) | ((pes.Copyright & 0x1) << 1) | (pes.OriginalOrCopy & 0x1)
-	pesData[7] = ((pes.PtsDtsFlags & 0x3) << 6) | ((pes.EscrFlag & 0x1) << 5) | ((pes.EsRateFlag & 0x1) << 4) | ((pes.DsmTrickModeFlag & 0x1) << 3) | ((pes.AdditionalCopyInfoFlag & 0x1) << 2) | ((pes.PesCrcFlag & 0x1) << 1) | (pes.PesExtensionFlag & 0x1)
-	pesData[8] = pes.PesHeaderDataLength
+	pesData[6] = ((pes.Oph.FixedValue0 & 0x3) << 6) | ((pes.Oph.PesScramblingControl & 0x3) << 4) | ((pes.Oph.PesPriority & 0x1) << 3) | ((pes.Oph.DataAlignmentIndicator & 0x1) << 2) | ((pes.Oph.Copyright & 0x1) << 1) | (pes.Oph.OriginalOrCopy & 0x1)
+	pesData[7] = ((pes.Oph.PtsDtsFlags & 0x3) << 6) | ((pes.Oph.EscrFlag & 0x1) << 5) | ((pes.Oph.EsRateFlag & 0x1) << 4) | ((pes.Oph.DsmTrickModeFlag & 0x1) << 3) | ((pes.Oph.AdditionalCopyInfoFlag & 0x1) << 2) | ((pes.Oph.PesCrcFlag & 0x1) << 1) | (pes.Oph.PesExtensionFlag & 0x1)
+	pesData[8] = pes.Oph.PesHeaderDataLength
 
-	pes.MarkerBit0 = 0x1
-	pes.MarkerBit1 = 0x1
-	pes.MarkerBit2 = 0x1
-	if pes.PtsDtsFlags == 0x2 { // 只有PTS, 40bit
-		pes.FixedValue1 = 0x2
-		pesData[9] = ((pes.FixedValue1 & 0xf) << 4) | uint8((pes.Pts>>29)&0xe) | (pes.MarkerBit0 & 0x1)
+	pes.Oph.Pts.MarkerBit0 = 0x1
+	pes.Oph.Pts.MarkerBit1 = 0x1
+	pes.Oph.Pts.MarkerBit2 = 0x1
+	if pes.Oph.PtsDtsFlags == 0x2 { // 只有PTS, 40bit
+		pes.Oph.Pts.FixedValue1 = 0x2
+		pesData[9] = ((pes.Oph.Pts.FixedValue1 & 0xf) << 4) | uint8((pes.Pts>>29)&0xe) | (pes.Oph.Pts.MarkerBit0 & 0x1)
 		pesData[10] = uint8((pes.Pts >> 22) & 0xff)
-		pesData[11] = uint8((pes.Pts>>14)&0xfe) | (pes.MarkerBit1 & 0x1)
+		pesData[11] = uint8((pes.Pts>>14)&0xfe) | (pes.Oph.Pts.MarkerBit1 & 0x1)
 		pesData[12] = uint8((pes.Pts >> 7) & 0xff)
-		pesData[13] = uint8(((pes.Pts & 0x7F) << 1)) | (pes.MarkerBit2 & 0x1)
+		pesData[13] = uint8(((pes.Pts & 0x7F) << 1)) | (pes.Oph.Pts.MarkerBit2 & 0x1)
 	}
-	if pes.PtsDtsFlags == 0x3 { // 有PTS 有DTS, 40bit + 40bit
-		pes.FixedValue1 = 0x3
-		pesData[9] = ((pes.FixedValue1 & 0xf) << 4) | uint8((pes.Pts>>29)&0xe) | (pes.MarkerBit0 & 0x1)
+	if pes.Oph.PtsDtsFlags == 0x3 { // 有PTS 有DTS, 40bit + 40bit
+		pes.Oph.Pts.FixedValue1 = 0x3
+		pesData[9] = ((pes.Oph.Dts.FixedValue1 & 0xf) << 4) | uint8((pes.Pts>>29)&0xe) | (pes.Oph.Dts.MarkerBit0 & 0x1)
 		pesData[10] = uint8((pes.Pts >> 22) & 0xff)
-		pesData[11] = uint8((pes.Pts>>14)&0xfe) | (pes.MarkerBit1 & 0x1)
+		pesData[11] = uint8((pes.Pts>>14)&0xfe) | (pes.Oph.Dts.MarkerBit1 & 0x1)
 		pesData[12] = uint8((pes.Pts >> 7) & 0xff)
-		pesData[13] = uint8(((pes.Pts & 0x7F) << 1)) | (pes.MarkerBit2 & 0x1)
-		pes.FixedValue1 = 0x1
-		pesData[14] = ((pes.FixedValue1 & 0xf) << 4) | uint8((pes.Dts>>29)&0xe) | (pes.MarkerBit0 & 0x1)
+		pesData[13] = uint8(((pes.Pts & 0x7F) << 1)) | (pes.Oph.Dts.MarkerBit2 & 0x1)
+		pes.Oph.Dts.FixedValue1 = 0x1
+		pesData[14] = ((pes.Oph.Dts.FixedValue1 & 0xf) << 4) | uint8((pes.Dts>>29)&0xe) | (pes.Oph.Dts.MarkerBit0 & 0x1)
 		pesData[15] = uint8((pes.Dts >> 22) & 0xff)
-		pesData[16] = uint8((pes.Dts>>14)&0xfe) | (pes.MarkerBit1 & 0x1)
+		pesData[16] = uint8((pes.Dts>>14)&0xfe) | (pes.Oph.Dts.MarkerBit1 & 0x1)
 		pesData[17] = uint8((pes.Dts >> 7) & 0xff)
-		pesData[18] = uint8(((pes.Dts & 0x7F) << 1)) | (pes.MarkerBit2 & 0x1)
+		pesData[18] = uint8(((pes.Dts & 0x7F) << 1)) | (pes.Oph.Dts.MarkerBit2 & 0x1)
 	}
 	//s.log.Printf("%#v", pes)
 	return &pes, pesData

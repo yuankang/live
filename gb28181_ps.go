@@ -124,7 +124,7 @@ type PsSystemHeader struct {
 	VideoBound                uint8        //5bit, 视频界限, 取值是在从0到16的闭区间中的整数
 	PacketRateRestrictionFlag uint8        //1bit, 分组速率限制, 若CSPS标识为'1'，则该字段表示2.7.9中规定的哪个限制适用于分组速率。若CSPS标识为'0'，则该字段的含义未定义
 	ReservedBits              uint8        //7bit, 保留位字段 0x7f
-	PsSysBound                []PsSysBound //目前没啥用
+	PsSysBounds               []PsSysBound //目前没啥用
 }
 
 //1+2=3
@@ -139,12 +139,36 @@ type PsSysBound struct {
 	PStdBufferSizeBound  uint16 //13bit, 缓冲区大小界限, 若P-STD_buffer_bound_scale的值为'0'，则该字段以128字节为单位来度量缓冲区大小的边界。若P-STD_buffer_bound_scale的值为'1'，则该字段以1024字节为单位来度量缓冲区大小的边界。
 }
 
+func ParsePsSysBound(s *Stream, l int, r *bytes.Reader) ([]PsSysBound, error) {
+	var err error
+	if l%3 != 0 {
+		err = fmt.Errorf("ParsePsSysBound() data error")
+		s.log.Println(err)
+		return nil, err
+	}
+
+	var psbs []PsSysBound
+	n := l / 3
+	for i := 0; i < n; i++ {
+		var psb PsSysBound
+		psb.StreamId, _ = ReadUint8(r)
+		b16, _ := ReadUint16(r, 2, BE)
+		psb.Reversed = uint8((b16 >> 14) & 0x3)
+		psb.PStdBufferBoundScale = uint8((b16 >> 13) & 0x1)
+		psb.PStdBufferSizeBound = (b16 >> 0) & 0x1fff
+		s.log.Printf("PsSysBound %d, %#v", i, psb)
+
+		psbs = append(psbs, psb)
+	}
+	return psbs, err
+}
+
 func ParsePsSysHeader(s *Stream, pps *PsPacket, r *bytes.Reader) (int, error) {
 	s.log.Println("--->> ParsePsSysHeader start")
 	var psh PsSystemHeader
 	var n int
 
-	psh.SystemHeaderStartCode = 0x000001ba
+	psh.SystemHeaderStartCode = 0x000001bb
 	psh.HeaderLength, _ = ReadUint16(r, 2, BE)
 	n += 2
 	b32, _ := ReadUint32(r, 4, BE)
@@ -166,24 +190,19 @@ func ParsePsSysHeader(s *Stream, pps *PsPacket, r *bytes.Reader) (int, error) {
 	psh.PacketRateRestrictionFlag = (b8 >> 7) & 0x1
 	psh.ReservedBits = (b8 >> 0) & 0x7f
 
-	//PsSysBound []PsSysBound //目前没啥用
-	dl := psh.HeaderLength - 6
-	_, _ = ReadByte(r, uint32(dl))
-	//d, _ := ReadByte(r, uint32(dl))
-	n += int(dl)
-	//s.log.Printf("PsSysBound:%x", d)
-	/*
-		psh.StreamId, _ = ReadUint8(r)
-		n += 1
-		b16, _ := ReadUint16(r, 2, BE)
-		n += 2
-		psh.Reversed = uint8((b16 >> 14) & 0x3)
-		psh.PStdBufferBoundScale = uint8((b16 >> 13) & 0x1)
-		psh.PStdBufferSizeBound = (b16 >> 0) & 0x1fff
-	*/
+	l := int(psh.HeaderLength - 6)
+	n += l
 
-	s.log.Printf("%#v, rLen=%d", psh, n)
+	var err error
+	psh.PsSysBounds, err = ParsePsSysBound(s, l, r)
+	if err != nil {
+		s.log.Println(err)
+		s.log.Println("--->> ParsePsSysHeader stop")
+		return n, err
+	}
+
 	pps.UseNum += n
+	s.log.Printf("%#v, rLen=%d", psh, n)
 	s.log.Println("--->> ParsePsSysHeader stop")
 	return n, nil
 }
@@ -284,6 +303,7 @@ func ParsePgmStreamInfo(s *Stream, r *bytes.Reader) int {
 		sm.DescriptorData, _ = ReadByte(r, uint32(sm.DescriptorLength))
 		n += int(sm.DescriptorLength)
 	}
+	s.log.Printf("%#v", sm)
 
 	if sm.ElementaryStreamId == 0xe0 {
 		switch sm.StreamType {
