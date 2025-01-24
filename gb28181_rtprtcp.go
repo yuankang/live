@@ -245,7 +245,7 @@ func RtpRecvTcp(c net.Conn) {
 		}
 
 		rp = RtpParse(d)
-		n = 200
+		n = 300
 		if n > l {
 			n = l
 		}
